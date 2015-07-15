@@ -194,3 +194,5 @@ FakesAssemblies/
 
 # Visual Studio 6 workspace options file
 *.opt
+CommanderDemo.Web/jspm_packages/
+CommanderDemo.Web/dist/

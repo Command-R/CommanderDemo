@@ -1,0 +1,130 @@
+﻿<#@ Template Language="C#" Debug="true" HostSpecific="true" #>
+<#@ Output Extension=".js" #>
+<#@ Assembly Name="System.Core" #>
+<#@ Assembly Name="EnvDTE" #>
+<#@ Import Namespace="EnvDTE" #>
+<#@ Import Namespace="System.Linq" #>
+<#@ Import Namespace="System.Collections.Generic" #>
+<#
+    // Generate a jsonRpc call for every ICommand or IQuery in the system.
+    const string fileInProject = "ContactDb.cs";
+    // TEMPLATE //
+#>
+angular.module("app").service("api", [
+    'jsonRpc',
+    function (jsonRpc) {
+        var self = {};
+<#
+    foreach (var rpc in GetRpcs(fileInProject)) {
+#>
+        self.<#= rpc.FormattedName #> = function() {
+            return jsonRpc.send("<#= rpc.Name #>", Array.prototype.slice.call(arguments));
+        };
+<#
+    }
+#>
+        return self;
+    }
+]);
+<#+ // SHARED CODE //
+    public class Rpc {
+        public string Name { get; set; }
+        public string FormattedName { get; set; }
+    };
+
+    public IEnumerable<Rpc> GetRpcs(string fileInProject)
+    {
+        var list = new List<Rpc>();
+        var requests = GetClasses(fileInProject).Where(cl => cl.ImplementedInterfaces.Cast<CodeInterface>().Any(i => i.Name.Contains("ICommand") || i.Name.Contains("IQuery")));
+        foreach (var req in requests)
+        {
+            list.Add(new Rpc {
+                Name = req.Name,
+                FormattedName = req.Name,
+            });
+        }
+        return list;
+    }
+
+    //REF: http://www.codeproject.com/Articles/39071/Declarative-Dependency-Property-Definition-with-T4.aspx
+    public IEnumerable<CodeClass> GetClasses(string fileInProject) {
+        var hostServiceProvider = (IServiceProvider)Host;
+        var dte = (EnvDTE.DTE)hostServiceProvider.GetService(typeof(EnvDTE.DTE));
+        var containingProjectItem = dte.Solution.FindProjectItem(fileInProject);
+        var project = containingProjectItem.ContainingProject;
+        var elements = CodeElementsInProjectItems(project.ProjectItems);
+        return elements.Where(el => el.Kind == vsCMElement.vsCMElementClass).Cast<CodeClass>();
+    }
+    public IEnumerable<CodeFunction> GetMethods(CodeClass codeClass) {
+        foreach (CodeElement codeElement in codeClass.Members) {
+            if (codeElement.Kind == vsCMElement.vsCMElementFunction) {
+                yield return (CodeFunction)codeElement;
+            }
+        }
+    }
+    public IEnumerable<CodeElement> CodeElementsInProjectItems(ProjectItems projectItems) {
+        foreach (ProjectItem projectItem in projectItems) {
+            foreach (CodeElement el in CodeElementsInProjectItem(projectItem)) {
+                yield return el;
+            }
+        }
+    }
+    public IEnumerable<CodeElement> CodeElementsInProjectItem(ProjectItem projectItem) {
+        FileCodeModel fileCodeModel = projectItem.FileCodeModel;
+         if (fileCodeModel != null) {
+            foreach (CodeElement codeElement in fileCodeModel.CodeElements) {
+                foreach(CodeElement el in CodeElementDescendantsAndSelf(codeElement)) {
+                    yield return el;
+                }
+            }
+        }
+        if (projectItem.ProjectItems != null) {
+            foreach (ProjectItem childItem in projectItem.ProjectItems) {
+                foreach (CodeElement el in CodeElementsInProjectItem(childItem)) {
+                    yield return el;
+                }
+            }
+        }
+    }
+    public IEnumerable<CodeElement> CodeElementsDescendants(CodeElements codeElements) {
+        foreach(CodeElement element in codeElements) {
+            foreach (CodeElement descendant in CodeElementDescendantsAndSelf(element)) {
+                yield return descendant;
+            }
+        }
+    }
+    public IEnumerable<CodeElement> CodeElementDescendantsAndSelf(CodeElement codeElement) {
+        yield return codeElement;
+        CodeElements codeElements;
+        switch(codeElement.Kind) {
+            /* namespaces */
+            case vsCMElement.vsCMElementNamespace: {
+                CodeNamespace codeNamespace = (CodeNamespace)codeElement;
+                codeElements = codeNamespace.Members;
+                foreach(CodeElement descendant in CodeElementsDescendants(codeElements)) {
+                    yield return descendant;
+                }
+                break;
+            }
+            /* Process classes */
+            case vsCMElement.vsCMElementClass: {
+                CodeClass codeClass = (CodeClass)codeElement;
+                codeElements = codeClass.Members;
+                foreach(CodeElement descendant in CodeElementsDescendants(codeElements)) {
+                    yield return descendant;
+                }
+                break;
+            }
+        }
+    }
+    public IEnumerable<CodeAttribute> Attributes(CodeClass codeClass) {
+        foreach (CodeElement element in codeClass.Attributes) {
+            yield return (CodeAttribute)element;
+        }
+    }
+    public IEnumerable<CodeAttribute> Attributes(CodeFunction codeFunction) {
+        foreach (CodeElement element in codeFunction.Attributes) {
+            yield return (CodeAttribute)element;
+        }
+    }
+#>

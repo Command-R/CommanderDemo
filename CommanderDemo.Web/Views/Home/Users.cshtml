@@ -1,0 +1,30 @@
+﻿@model QueryUsers.Response
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+<form method="GET" class="form-inline">
+    @Html.ActionLink("Add User", "EditUser", null, new { @class = "btn btn-primary" })
+    <label class="checkbox">@Html.CheckBox("Inactive", Model.Query.Inactive) Inactive</label>
+    <button type="submit" class="btn btn-default">Load</button>
+</form>
+<table class="table table-striped table-hover">
+    <thead>
+        <tr>
+            <th>&nbsp;</th>
+            <th>Id</th>
+            <th>Username</th>
+            <th>IsActive</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var user in Model.Result.Items)
+        {
+            <tr>
+                <td>@Html.ActionLink("Edit", "EditUser", new { user.Id }, new { @class = "btn btn-primary" })</td>
+                <td>@user.Id</td>
+                <td>@user.Username</td>
+                <td>@user.IsActive</td>
+            </tr>
+        }
+    </tbody>
+</table>

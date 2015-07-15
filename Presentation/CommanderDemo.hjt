@@ -1,0 +1,4246 @@
+<Treepad version 3.0>
+dt=Text
+<node>
+CommanderDemo
+0
+Command and Conquer
+
+Paul Wheeler
+Solutions Architect @ Martus Solutions
+
+http://paulwheeler.com/
+@PaulWheeler
+paul@paulwheeler.com
+
+How the command pattern can reduce complexity, help limit your abstractions, and promote clean separation within your code. We will be digging into the MediatR open-source library by Jimmy Bogard, the JsonRpc 2.0 specification, and the soon-to-be open-sourced CommandR project (by yours truly) and other interesting projects. We will go through demo applications in both Asp.net MVC and WebAPI + Aurelia.js. There may even be a few more surprises if time allows.
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Command Pattern
+1
+
+What is the Command Pattern?
+
+In object-oriented programming, the command pattern is a behavioral design pattern in which an object is used to *encapsulate all information needed to perform an action* or trigger an event at a later time. This information includes the method name, the object that owns the method and values for the method parameters.
+
+https://en.wikipedia.org/?title=Command_pattern
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+MediatR
+1
+
+Demo MediatR library in LinqPad
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Mediator Pattern
+2
+
+Mediator Pattern
+https://en.wikipedia.org/wiki/Mediator_pattern
+
+In Software Engineering, the mediator pattern defines an object that encapsulates how a set of objects interact. This pattern is considered to be a behavioral pattern due to the way it can alter the program's running behavior
+
+Why?
+https://lostechies.com/jimmybogard/2014/09/09/tackling-cross-cutting-concerns-with-a-mediator-pipeline/
+
+* It allows the application code to define a pipeline of activities for requests, as opposed to embedding this pipeline in other frameworks such as Rails, node.js, ASP.NET Web API
+
+* Cross-cutting concerns become implementations of the decorator pattern
+  - Validation
+  - Pre/post processing
+  - Authorization
+  - Logging
+  - Auditing
+  - Event dispatching
+  - Notifications
+  - Unit of work/transactions
+
+More Reading
+ http://ayende.com/blog/153889/limit-your-abstractions-analyzing-a-ddd-application
+ http://ayende.com/blog/154241/limit-your-abstractions-the-key-is-in-the-infrastructure
+ https://lostechies.com/jimmybogard/2013/12/19/put-your-controllers-on-a-diet-posts- and-commands/ 
+ https://lostechies.com/jimmybogard/2015/05/05/cqrs-with-mediatr-and-automapper/
+ http://tech.pro/blog/1498/why-the-n-layer-approach-is-bad-for-us-all
+ https://lostechies.com/gabrielschenker/2015/05/11/ddd-special-scenarios-part-2/
+ https://lostechies.com/gabrielschenker/2015/04/28/ddd-applied/
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+MediatR Project
+2
+
+MediatR Project
+https://github.com/jbogard/MediatR/wiki
+https://www.nuget.org/packages/MediatR
+
+MediatR is a simple, unambitious mediator implementation in .NET by Jimmy Bogard that supports request/response, commands, queries, notifications and events, synchronous and async with intelligent dispatching via C# generic variance.
+
+* MediatR contains a uniform interface of inputs and outputs, making decorators around cross-cutting concerns trivial
+
+* One model in, one model out pattern greatly simplifies conceptualizing the system and realizing more powerful patterns
+
+* Handler interface represents the ability to take an input model, perform work in Handle method, and return an output model
+
+* Supports Single Responsibility Principal since handlers only do one thing
+
+* All of this would be a bit easier if the underlying language supported this behavior. Since many don’t, we rely instead of translating these functional paradigms to OO patterns with IoC containers containing our glue
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+MediatR Interfaces
+2
+
+1. Request/response messages, dispatched to a single handler
+
+    //Request
+    interface IRequest<out TResponse> { }
+    interface IRequestHandler<in TRequest, out TResponse>
+        where TRequest : IRequest<TResponse>
+    {
+        TResponse Handle(TRequest message);
+    }
+
+    //AsyncRequest
+    interface IAsyncRequest<out TResponse> { }
+    interface IAsyncRequestHandler<in TRequest, TResponse>
+        where TRequest : IAsyncRequest<TResponse>
+    {
+        Task<TResponse> Handle(TRequest message);
+    }
+
+2. Notification messages, dispatched to multiple handlers
+
+    //Notification
+    interface INotification { }
+    interface INotificationHandler<in TNotification>
+        where TNotification : INotification
+    {
+        void Handle(TNotification notification);
+    }
+
+    //AsyncNotification
+    interface IAsyncNotification { }
+    interface IAsyncNotificationHandler<in TNotification>
+        where TNotification : IAsyncNotification
+    {
+        Task Handle(TNotification notification);
+    }
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Linqpad
+2
+//NUGET: MediatR 2.0.0-beta-003
+//NUGET: SimpleInjector 2.8.0
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+CreateMediator
+3
+
+//REF: https://github.com/jbogard/MediatR/blob/master/src/MediatR.Examples.SimpleInjector/Program.cs
+
+static IMediator CreateMediator() 
+{
+    var assemblies = new[] { Assembly.GetExecutingAssembly() };
+    var container = new Container();
+    container.RegisterSingle<IMediator>(() => new Mediator(container.GetInstance, container.GetAllInstances));
+
+    container.RegisterManyForOpenGeneric(typeof(IRequestHandler<,>), assemblies);
+    container.RegisterManyForOpenGeneric(typeof(IAsyncRequestHandler<,>), assemblies);
+    container.RegisterManyForOpenGeneric(typeof(INotificationHandler<>), container.RegisterAll, assemblies);
+    container.RegisterManyForOpenGeneric(typeof(IAsyncNotificationHandler<>), container.RegisterAll, assemblies);
+
+    return container.GetInstance<IMediator>();
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+IRequest
+3
+void Main() {
+    var mediator = CreateMediator();
+    var ping = new Ping { Name = "Paul" };
+    var response = mediator.Send(ping);
+    Console.WriteLine(response);
+}
+
+public class Ping : IRequest<string> {
+    public string Name { get; set; }
+}
+
+public class PingHandler : IRequestHandler<Ping, string> {
+    public string Handle(Ping ping) {
+        return "Ping: " + ping.Name;
+    }
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+IAsyncRequest
+3
+//using System.Threading.Tasks
+async Task Main() {
+    var mediator = CreateMediator();
+    var asyncPing = new AsyncPing { Name = "Paul" };
+    var response = await mediator.SendAsync(asyncPing);
+    Console.WriteLine(response);
+}
+
+public class AsyncPing : IAsyncRequest<string> {
+    public string Name { get; set; }
+}
+
+internal class AsyncPingHandler : IAsyncRequestHandler<AsyncPing, string> {
+    public async Task<string> Handle(AsyncPing asyncPing) {
+        var message = "AsyncPing: " + asyncPing.Name;
+        return await Task.FromResult(message);
+    }
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+INotification
+3
+void Main() {
+    var mediator = CreateMediator();
+    var alert = new Alert { Message = "Very Important!" };
+    mediator.Publish(alert);
+}
+
+public class Alert : INotification {
+    public string Message { get; set; }
+}
+
+internal class AlertHandler1 : INotificationHandler<Alert> {
+    public void Handle(Alert alert) {
+        Console.WriteLine("AlertHandler1: " + alert.Message);
+    }
+}
+
+internal class AlertHandler2 : INotificationHandler<Alert> {
+    public void Handle(Alert alert) {
+        Console.WriteLine("AlertHandler2: " + alert.Message);
+    }
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+IAsyncNotification
+3
+//System.Threading.Tasks
+void Main() {
+    var mediator = CreateMediator();
+    var asyncAlert = new AsyncAlert { Message = "Very Important!" };
+    mediator.PublishAsync(asyncAlert);
+}
+
+public class AsyncAlert : IAsyncNotification {
+    public string Message { get; set; }
+}
+
+internal class AsyncAlertHandler1 : IAsyncNotificationHandler<AsyncAlert> {
+    public async Task Handle(AsyncAlert asyncAlert) {
+        await Task.Run(() => Console.WriteLine("AsyncAlertHandler1: " + asyncAlert.Message));
+    }
+}
+
+internal class AsyncAlertHandler2 : IAsyncNotificationHandler<AsyncAlert> {
+    public async Task Handle(AsyncAlert asyncAlert) {
+        await Task.Run(() => Console.WriteLine("AsyncAlertHandler2: " + asyncAlert.Message));
+    }
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Command
+3
+void Main() {
+    var mediator = CreateMediator();
+    var ping = new Ping { Name = "Paul" };
+    var pong = mediator.Send(ping);
+    Console.WriteLine(pong.Message);
+}
+
+//Command includes Handler and Response as nested types
+public class Ping : IRequest<Ping.Pong> 
+{
+    public string Name { get; set; }
+    
+    public class Pong {
+        public string Message { get; set; }
+    }
+    
+    internal class Handler : IRequestHandler<Ping, Pong> 
+    {     
+        public Pong Handle(Ping request) {
+            return new Pong { 
+                Message = "Ping: " + request.Name
+            };
+        }
+    }
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Service
+3
+void Main() 
+{
+    var mediator = CreateMediator();
+    var ping = new Ping { Name = "Paul" };
+    var pong = mediator.Send(ping);
+    Console.WriteLine(pong.Message);
+}
+
+public class Ping : IRequest<Ping.Pong> 
+{
+    public string Name { get; set; }
+    
+    public class Pong {
+        public string Message { get; set; }
+    }
+    
+    internal class Handler : IRequestHandler<Ping, Pong> 
+    {
+        private readonly MessageService _messageService;
+        
+        public Handler(MessageService messageService) {
+            _messageService = messageService;
+        }
+        
+        public Pong Handle(Ping request) {
+            return new Pong { 
+                Message = _messageService.GetMessage() + "Ping: " + request.Name
+            };
+        }
+    }
+}
+
+internal class MessageService 
+{
+    public string GetMessage() {
+        return "MessageService: ";
+    }
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Decorator
+3
+/*
+Pretty much anything you’d consider to use a Filter in ASP.NET or Rails that’s more concerned with application-level behavior and not framework/transport specific concerns would work as a decorator in our handlers
+*/
+
+void Main() {
+    var mediator = CreateMediator();
+    var ping = new Ping { Name = "Paul" };
+    var response = mediator.Send(ping);
+}
+
+public class Ping : IRequest<string> 
+{
+    public string Name { get; set; }
+
+    internal class PingHandler : IRequestHandler<Ping, string> 
+    {     
+        public string Handle(Ping ping) {
+            var message = "Ping: " + ping.Name;
+            Console.WriteLine(message);
+            return message;
+        }
+    }
+}
+
+internal class RequestLoggingHandler<TReq, TResp> : IRequestHandler<TReq, TResp> where TReq:IRequest<TResp> 
+{
+    private readonly IRequestHandler<TReq, TResp> _inner;
+
+    public RequestLoggingHandler(IRequestHandler<TReq, TResp> inner) {
+        _inner = inner;
+    }
+
+    public TResp Handle(TReq request) {
+        Console.WriteLine("RequestLoggingHandler (before): " + request.GetType().Name);
+        var response = _inner.Handle(request);
+        Console.WriteLine("RequestLoggingHandler (after): " + request.GetType().Name);
+        return response;
+    }
+}
+
+//container.RegisterDecorator(typeof(IRequestHandler<,>), typeof(RequestLoggingHandler<,>));
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+CommanderDemo.Domain
+1
+
+Visual Studio
+* New Project > Visual C# >  Class Library: CommanderDemo.Domain
+* Create directory for solution: CommanderDemo
+
+Install-Package EntityFramework -Version 6.1.3
+
+Install-Package Command-R -Pre -Version 0.2.0-beta
+
+* delete App.config
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Command-R Project
+2
+
+Command-R Organization
+https://github.com/Command-R
+
+Command-R
+https://github.com/Command-R/Command-R
+
+* Execute MediatR requests via JsonRpc using WebAPI
+
+CfgDotNet
+https://github.com/Command-R/CfgDotNet
+
+* A method of doing configuration with JSON files in .NET
+
+* Supports various sources for settings
+  - AppSettings
+  - ConnectionStrings
+  - cfg.json
+  - Database
+
+* SettingsManager which makes it easy to use strongly-typed settings classes (simimilar to what is coming in Asp.net). Simply finds all ISettings classes, loads their configuration, and injects into container.
+
+* Optional ISetting.Validate method allows application to fail fast on startup if required resource is not available with clear diagnostic info.
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Models
+2
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Contact.cs
+3
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace CommanderDemo.Domain
+{
+    [Table("Contact")]
+    internal class Contact
+    {
+        [Key]
+        public int Id { get; set; }
+
+        [StringLength(25)]
+        public string FirstName { get; set; }
+
+        [StringLength(25)]
+        public string LastName { get; set; }
+
+        [StringLength(100)]
+        public string Email { get; set; }
+
+        [StringLength(25)]
+        public string PhoneNumber { get; set; }
+    };
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+User.cs
+3
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace CommanderDemo.Domain
+{
+    [Table("User")]
+    internal class User
+    {
+        [Key]
+        public int Id { get; set; }
+
+        [StringLength(100)]
+        public string Username { get; set; }
+
+        [StringLength(100)]
+        public string Password { get; set; }
+
+        public bool IsActive { get; set; }
+    };
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+ContactDb.cs
+3
+using System.Data.Entity;
+using System.Diagnostics;
+
+namespace CommanderDemo.Domain
+{
+    internal class ContactDb : DbContext
+    {
+        public ContactDb()
+        {
+            Database.SetInitializer(new MigrateDatabaseToLatestVersion<ContactDb, MigrationsConfig>());
+            Database.Log = sql => Debug.WriteLine(sql);
+        }
+
+        public virtual IDbSet<Contact> Contacts { get; set; }
+        public virtual IDbSet<User> Users { get; set; }
+    };
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+MigrationsConfig.cs
+3
+using System.Data.Entity.Migrations;
+
+namespace CommanderDemo.Domain
+{
+    internal class MigrationsConfig : DbMigrationsConfiguration<ContactDb>
+    {
+        public MigrationsConfig()
+        {
+            AutomaticMigrationsEnabled = true;
+        }
+
+        protected override void Seed(ContactDb db)
+        {
+            AddUsers(db);
+            base.Seed(db);
+        }
+
+        private static void AddUsers(ContactDb db)
+        {
+            db.Users.AddOrUpdate(x => x.Username,
+                new User
+                {
+                    Username = "Admin",
+                    Password = "password",
+                    IsActive = true,
+                }
+            );
+        }
+    };
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Users
+2
+
+CRUD commands
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+QueryUsers.cs
+3
+/*
+  CommandR provides the [Authorize] to secure the command
+  CommandR provides IPageable and PagedList classes
+  CommandR provides IQuery marker interface
+*/
+using System.Linq;
+using CommandR;
+using CommandR.Authentication;
+using CommandR.Extensions;
+using MediatR;
+
+namespace CommanderDemo.Domain
+{
+    [Authorize]
+    public class QueryUsers : IQuery, IPageable, IRequest<QueryUsers.Response>
+    {
+        public bool Inactive { get; set; }
+        public int? PageNumber { get; set; }
+        public int? PageSize { get; set; }
+
+        public class Response
+        {
+            public QueryUsers Query { get; set; }
+            public PagedList<UserInfo> Result { get; set; }
+        };
+
+        public class UserInfo
+        {
+            public int Id { get; set; }
+            public string Username { get; set; }
+            public bool IsActive { get; set; }
+        };
+
+        internal class Handler : IRequestHandler<QueryUsers, Response>
+        {
+            private readonly ContactDb _db;
+
+            public Handler(ContactDb db)
+            {
+                _db = db;
+            }
+
+            public Response Handle(QueryUsers cmd)
+            {
+                var query = _db.Users.AsQueryable();
+
+                if (!cmd.Inactive)
+                {
+                    query = query.Where(x => x.IsActive);
+                }
+
+                var result = query
+                    .Select(x => new UserInfo
+                    {
+                        Id = x.Id,
+                        Username = x.Username,
+                        IsActive = x.IsActive,
+                    })
+                    .OrderBy(x => x.Id)
+                    .ToPagedList(cmd, 25, 100);
+
+                return new Response
+                {
+                    Query = cmd,
+                    Result = result,
+                };
+            }
+        }
+    };
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+GetUser.cs
+3
+/*
+  CommandR provides CopyTo method (similar to AutoMapper)
+*/
+using CommandR;
+using CommandR.Authentication;
+using CommandR.Extensions;
+using MediatR;
+
+namespace CommanderDemo.Domain
+{
+    [Authorize]
+    public class GetUser : IQuery, IRequest<GetUser.UserInfo>
+    {
+        public int Id { get; set; }
+
+        public class UserInfo
+        {
+            public int Id { get; set; }
+            public string Username { get; set; }
+            public string Password { get; set; }
+            public bool IsActive { get; set; }
+        }
+
+        internal class Handler : IRequestHandler<GetUser, UserInfo>
+        {
+            private readonly ContactDb _db;
+
+            public Handler(ContactDb db)
+            {
+                _db = db;
+            }
+
+            public UserInfo Handle(GetUser cmd)
+            {
+                var user = _db.Users.Find(cmd.Id)
+                           ?? new User();
+
+                return user.CopyTo(new UserInfo());
+            }
+        }
+    };
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+SaveUser.cs
+3
+using System;
+using CommandR;
+using CommandR.Authentication;
+using CommandR.Extensions;
+using MediatR;
+
+namespace CommanderDemo.Domain
+{
+    [Authorize]
+    public class SaveUser : ICommand, IRequest<int>
+    {
+        public int Id { get; set; }
+        public string Username { get; set; }
+        public string Password { get; set; }
+        public bool IsActive { get; set; }
+
+        internal class Handler : IRequestHandler<SaveUser, int>
+        {
+            private readonly ContactDb _db;
+
+            public Handler(ContactDb db)
+            {
+                _db = db;
+            }
+
+            public int Handle(SaveUser cmd)
+            {
+                if (string.IsNullOrEmpty(cmd.Username))
+                    throw new ApplicationException("Username is required");
+
+                if (string.IsNullOrEmpty(cmd.Password))
+                    throw new ApplicationException("Password is required");
+
+                var user = _db.Users.Find(cmd.Id)
+                       ?? new User();
+
+                cmd.CopyTo(user);
+                if (user.Id == 0) _db.Users.Add(user);
+                _db.SaveChanges();
+
+                return user.Id;
+            }
+        };
+    };
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+DeleteUser.cs
+3
+using System;
+using CommandR;
+using CommandR.Authentication;
+using MediatR;
+
+namespace CommanderDemo.Domain
+{
+    [Authorize(Users = "Admin")]
+    public class DeleteUser : ICommand, IRequest<bool>
+    {
+        public int Id { get; set; }
+
+        internal class Handler : IRequestHandler<DeleteUser, bool>
+        {
+            private readonly ContactDb _db;
+
+            public Handler(ContactDb db)
+            {
+                _db = db;
+            }
+
+            public bool Handle(DeleteUser deleteUser)
+            {
+                try
+                {
+                    var user = _db.Users.Find(deleteUser.Id);
+                    _db.Users.Remove(user);
+                    _db.SaveChanges();
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    throw new ApplicationException("DeleteUser ERROR for Id: " + deleteUser.Id, ex);
+                }
+            }
+        }
+    };
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Authentication
+2
+
+Authentication commands
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+LoginUser.cs
+3
+/*
+  CommandR provides ITokenService interface which will persist a dictionary
+  of data for the logged in user and generate a token which can be used
+  to retrieve it.
+*/
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using CommandR;
+using CommandR.Authentication;
+using MediatR;
+
+namespace CommanderDemo.Domain
+{
+    [AllowAnonymous]
+    public class LoginUser : ICommand, IRequest<string>
+    {
+        public string Username { get; set; }
+        public string Password { get; set; }
+
+        internal class Handler : IRequestHandler<LoginUser, string>
+        {
+            private readonly ContactDb _db;
+            private readonly ITokenService _tokenService;
+
+            public Handler(ContactDb db, ITokenService tokenService)
+            {
+                _db = db;
+                _tokenService = tokenService;
+            }
+
+            public string Handle(LoginUser cmd)
+            {
+                var user = _db.Users
+                              .SingleOrDefault(x => x.Username == cmd.Username);
+
+                if (user == null || user.Password != cmd.Password || !user.IsActive)
+                    throw new ApplicationException("Invalid login");
+
+                var tokenId = _tokenService.CreateToken(new Dictionary<string, object>
+                {
+                    {"Username", user.Username},
+                    {"Roles", new string[0]},
+                });
+
+                return tokenId;
+            }
+        };
+    };
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+LogoutUser
+3
+/*
+  CommandR provides [AllowAnonymous] to indicate authentication isn't
+  required for this command
+*/
+using CommandR;
+using CommandR.Authentication;
+using MediatR;
+
+namespace CommanderDemo.Domain
+{
+    [AllowAnonymous]
+    public class LogoutUser : ICommand, IRequest
+    {
+        public string TokenId { get; set; }
+
+        internal class Handler : RequestHandler<LogoutUser>
+        {
+            private readonly ITokenService _tokenService;
+
+            public Handler(ITokenService tokenService)
+            {
+                _tokenService = tokenService;
+            }
+
+            protected override void HandleCore(LogoutUser cmd)
+            {
+                _tokenService.DeleteToken(cmd.TokenId);
+            }
+        };
+    };
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+GetUserToken.cs
+3
+/*
+  HACK to allow us to reconsitute a token from the Asp.net identity since
+  we are mixing MVC and WebAPI
+*/
+using System.Collections.Generic;
+using System.Linq;
+using CommandR;
+using CommandR.Authentication;
+using MediatR;
+
+namespace CommanderDemo.Domain
+{
+    [AllowAnonymous]
+    internal class GetUserToken : ICommand, IRequest<string>
+    {
+        public string Username { get; set; }
+
+        internal class Handler : IRequestHandler<GetUserToken, string>
+        {
+            private readonly ContactDb _db;
+            private readonly ITokenService _tokenService;
+
+            public Handler(ContactDb db, ITokenService tokenService)
+            {
+                _db = db;
+                _tokenService = tokenService;
+            }
+
+            public string Handle(GetUserToken cmd)
+            {
+                var user = _db.Users
+                              .SingleOrDefault(x => x.Username == cmd.Username);
+
+                if (user == null)
+                    return null;
+
+                var tokenId = _tokenService.CreateToken(new Dictionary<string, object>
+                {
+                    {"Username", user.Username},
+                    {"Roles", new string[0]},
+                });
+
+                return tokenId;
+            }
+        };
+    };
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+CommanderDemo.Test
+1
+
+Visual Studio
+* New Project > Visual C# >  Class Library: CommanderDemo.Test
+
+Add Reference
+* CommanderDemo.Domain
+
+Manage NuGet Packages for Solution
+* Command-R
+* EntityFramework
+
+Install-Package xunit -Version 1.9.2
+
+Install-Package FakeItEasy -Version 1.25.2
+
+Install-Package Shouldly -Version 2.5.0
+
+
+CommanderDemo.Domain AssemblyInfo.cs
+
+[assembly: InternalsVisibleTo("CommanderDemo.Web")]
+[assembly: InternalsVisibleTo("CommanderDemo.Test")]
+[assembly: InternalsVisibleTo("DynamicProxyGenAssembly2")]
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+FakeDbSet.cs
+2
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.ComponentModel.DataAnnotations;
+using System.Data.Entity;
+using System.Linq;
+using System.Linq.Expressions;
+using System.Reflection;
+
+namespace CommanderDemo.Test
+{
+    public static class FakeDbSetExtensions
+    {
+        public static IDbSet<T> ToDbSet<T>(this IEnumerable<T> items) where T : class
+        {
+            return new FakeDbSet<T>(items);
+        }
+    };
+
+    //REF: http://blog.brentmckendrick.com/generic-repository-fake-idbset-implementation-update-find-method-identity-key/
+    public class FakeDbSet<T> : IDbSet<T> where T : class
+    {
+        private readonly HashSet<T> _data;
+        private readonly IQueryable _query;
+        private int _identity;
+        private List<PropertyInfo> _keyProperties;
+
+        private void GetKeyProperties()
+        {
+            _keyProperties = new List<PropertyInfo>();
+            var properties = typeof(T).GetProperties();
+            foreach (var property in properties)
+            {
+                foreach (Attribute attribute in property.GetCustomAttributes(true))
+                {
+                    if (attribute is KeyAttribute)
+                    {
+                        _keyProperties.Add(property);
+                    }
+                }
+            }
+        }
+
+        private void GenerateId(T entity)
+        {
+            // If non-composite integer key
+            if (_keyProperties.Count == 1 && _keyProperties[0].PropertyType == typeof(int))
+                _keyProperties[0].SetValue(entity, _identity++, null);
+        }
+
+        public FakeDbSet(IEnumerable<T> startData = null)
+        {
+            GetKeyProperties();
+            _data = (startData != null ? new HashSet<T>(startData) : new HashSet<T>());
+            _query = _data.AsQueryable();
+            _identity = GetMaxId() + 1;
+        }
+
+        public virtual T Find(params object[] keyValues)
+        {
+            if (keyValues.Length != _keyProperties.Count)
+                throw new ArgumentException("Incorrect number of keys passed to find method");
+
+            var keyQuery = this.AsQueryable();
+            for (var i = 0; i < keyValues.Length; i++)
+            {
+                var x = i; // nested linq
+                keyQuery = keyQuery.Where(entity => _keyProperties[x].GetValue(entity, null).Equals(keyValues[x]));
+            }
+
+            return keyQuery.SingleOrDefault();
+        }
+
+        private int GetMaxId()
+        {
+            if (_keyProperties.Count != 1 || _keyProperties[0].PropertyType != typeof (int) || _data.Count == 0)
+                return 0;
+
+            var entity = _data.Last();
+            return (int)_keyProperties[0].GetValue(entity);
+        }
+
+        public virtual T Add(T item)
+        {
+            GenerateId(item);
+            _data.Add(item);
+            return item;
+        }
+
+        public virtual T Remove(T item)
+        {
+            _data.Remove(item);
+            return item;
+        }
+
+        public virtual T Attach(T item)
+        {
+            _data.Add(item);
+            return item;
+        }
+
+        public virtual void Detach(T item)
+        {
+            _data.Remove(item);
+        }
+
+        Type IQueryable.ElementType
+        {
+            get { return _query.ElementType; }
+        }
+
+        Expression IQueryable.Expression
+        {
+            get { return _query.Expression; }
+        }
+
+        IQueryProvider IQueryable.Provider
+        {
+            get { return _query.Provider; }
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return _data.GetEnumerator();
+        }
+
+        IEnumerator<T> IEnumerable<T>.GetEnumerator()
+        {
+            return _data.GetEnumerator();
+        }
+
+        public virtual T Create()
+        {
+            return Activator.CreateInstance<T>();
+        }
+
+        public virtual ObservableCollection<T> Local
+        {
+            get { return new ObservableCollection<T>(_data); }
+        }
+
+        public virtual TDerivedEntity Create<TDerivedEntity>() where TDerivedEntity : class, T
+        {
+            return Activator.CreateInstance<TDerivedEntity>();
+        }
+    };
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+TestQueryUsers.cs
+2
+using System.Linq;
+using CommanderDemo.Domain;
+using FakeItEasy;
+using Shouldly;
+using Xunit;
+
+namespace CommanderDemo.Test
+{
+    public class TestQueryUsers
+    {
+        private readonly QueryUsers.Handler _handler;
+
+        public TestQueryUsers()
+        {
+            var users = new[]
+            {
+                new User {Id = 1, IsActive = true},
+                new User {Id = 2, IsActive = false},
+                new User {Id = 3, IsActive = true},
+                new User {Id = 4, IsActive = false},
+            }.ToDbSet();
+
+            var db = A.Fake<ContactDb>();
+            A.CallTo(() => db.Users).Returns(users);
+
+            _handler = new QueryUsers.Handler(db);
+        }
+
+        [Fact]
+        public void Test_QueryUsers_Excludes_Inactive_By_Default()
+        {
+            var queryUsers = new QueryUsers();
+            var response = _handler.Handle(queryUsers);
+            response.Result.Items.Count().ShouldBe(2);
+        }
+
+        [Fact]
+        public void Test_QueryUsers_Includes_Inactive_If_True()
+        {
+            var queryUsers = new QueryUsers { Inactive = true };
+            var response = _handler.Handle(queryUsers);
+            response.Result.Items.Count().ShouldBe(4);
+        }
+
+        [Fact]
+        public void Test_QueryUsers_Paging()
+        {
+            var queryUsers = new QueryUsers { Inactive = true, PageNumber = 3, PageSize = 1 };
+            var response = _handler.Handle(queryUsers);
+            response.Result.Items.Single().Id.ShouldBe(3);
+        }
+    };
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+CommanderDemo.Web
+1
+
+Visual Studio
+* New Project > Visual C# > Web Asp.net Web Application: CommanderDemo.Web
+* Empty, unhosted
+* Set as StartUp Project
+* Change project properties to target 4.5.2
+* Set project Web properties to empty Specific Page
+
+Add Reference
+* CommanderDemo.Domain
+
+Manage NuGet Packages for Solution
+* Command-R
+* EntityFramework
+
+Install-Package Microsoft.AspNet.Mvc -Version 5.2.3
+
+Install-Package SimpleInjector.Integration.Web.Mvc -Version 2.8.0
+
+Install-Package SimpleInjector.Extensions.LifetimeScoping -Version 2.8.0
+
+Install-Package JWT -Version 1.3.4
+
+Install-Package CfgDotNet -Version 1.2.0
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Web.config
+2
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <configSections>
+    <sectionGroup name="system.web.webPages.razor" type="System.Web.WebPages.Razor.Configuration.RazorWebSectionGroup, System.Web.WebPages.Razor, Version=3.0.0.0, Culture=neutral, PublicKeyToken=31BF3856AD364E35">
+      <section name="host" type="System.Web.WebPages.Razor.Configuration.HostSection, System.Web.WebPages.Razor, Version=3.0.0.0, Culture=neutral, PublicKeyToken=31BF3856AD364E35" requirePermission="false" />
+      <section name="pages" type="System.Web.WebPages.Razor.Configuration.RazorPagesSection, System.Web.WebPages.Razor, Version=3.0.0.0, Culture=neutral, PublicKeyToken=31BF3856AD364E35" requirePermission="false" />
+    </sectionGroup>
+    <section name="entityFramework" type="System.Data.Entity.Internal.ConfigFile.EntityFrameworkSection, EntityFramework, Version=6.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089" requirePermission="false" />
+  </configSections>
+  <appSettings>
+    <add key="TokenService+Settings.Key" value="UFADgfJRhH17T/P2tfuIH3LmOsOoredxwQfLm74szLTcvLxceaCfO4q2wR3d3GR3" />
+    <add key="MongoQueueService+Settings.IsDisabled" value="true" />
+  </appSettings>
+  <system.web>
+    <authentication mode="Forms">
+      <forms name="CommanderDemo" loginUrl="~/Home/Login" />
+    </authentication>
+    <compilation debug="true" targetFramework="4.5.2" />
+    <httpRuntime targetFramework="4.5.2" />
+  </system.web>
+  <system.net>
+    <mailSettings>
+      <smtp from="test@example.com" deliveryMethod="Network">
+        <network host="localhost" port="25" />
+      </smtp>
+    </mailSettings>
+  </system.net>
+  <system.web.webPages.razor>
+    <host factoryType="System.Web.Mvc.MvcWebRazorHostFactory, System.Web.Mvc, Version=5.2.2.0, Culture=neutral, PublicKeyToken=31BF3856AD364E35" />
+    <pages pageBaseType="System.Web.Mvc.WebViewPage">
+      <namespaces>
+        <add namespace="System.Web.Mvc" />
+        <add namespace="System.Web.Mvc.Html" />
+        <add namespace="CommandR.Extensions" />
+        <add namespace="CommanderDemo.Domain" />
+      </namespaces>
+    </pages>
+  </system.web.webPages.razor>
+  <entityFramework>
+    <defaultConnectionFactory type="System.Data.Entity.Infrastructure.SqlConnectionFactory, EntityFramework" />
+    <providers>
+      <provider invariantName="System.Data.SqlClient" type="System.Data.Entity.SqlServer.SqlProviderServices, EntityFramework.SqlServer" />
+    </providers>
+  </entityFramework>
+  <runtime>
+    <assemblyBinding xmlns="urn:schemas-microsoft-com:asm.v1">
+      <dependentAssembly>
+        <assemblyIdentity name="System.Web.Http" publicKeyToken="31bf3856ad364e35" culture="neutral" />
+        <bindingRedirect oldVersion="0.0.0.0-5.2.3.0" newVersion="5.2.3.0" />
+      </dependentAssembly>
+      <dependentAssembly>
+        <assemblyIdentity name="System.Web.Helpers" publicKeyToken="31bf3856ad364e35" />
+        <bindingRedirect oldVersion="1.0.0.0-3.0.0.0" newVersion="3.0.0.0" />
+      </dependentAssembly>
+      <dependentAssembly>
+        <assemblyIdentity name="System.Web.WebPages" publicKeyToken="31bf3856ad364e35" />
+        <bindingRedirect oldVersion="1.0.0.0-3.0.0.0" newVersion="3.0.0.0" />
+      </dependentAssembly>
+      <dependentAssembly>
+        <assemblyIdentity name="System.Web.Mvc" publicKeyToken="31bf3856ad364e35" />
+        <bindingRedirect oldVersion="0.0.0.0-5.2.3.0" newVersion="5.2.3.0" />
+      </dependentAssembly>
+    </assemblyBinding>
+  </runtime>
+</configuration>
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Global.asax.cs
+2
+using System;
+using System.Data.Entity;
+using System.Reflection;
+using System.Web;
+using System.Web.Mvc;
+using System.Web.Routing;
+using CfgDotNet;
+using CommanderDemo.Domain;
+using CommandR.Authentication;
+using MediatR;
+using SimpleInjector;
+using SimpleInjector.Extensions;
+using SimpleInjector.Extensions.LifetimeScoping;
+using SimpleInjector.Integration.Web;
+using SimpleInjector.Integration.Web.Mvc;
+
+namespace CommanderDemo.Web
+{
+    public class Global : HttpApplication
+    {
+        private static Container _container;
+        private static Assembly[] _assemblies;
+
+        protected void Application_Start(object sender, EventArgs e)
+        {
+            _container = new Container();
+            var lifestyle = Lifestyle.CreateHybrid(() => HttpContext.Current == null,
+                new LifetimeScopeLifestyle(true),
+                new WebRequestLifestyle(true));
+
+            _assemblies = new[]
+            {
+                typeof(Global).Assembly,
+                typeof(LoginUser).Assembly,
+                typeof(CommandR.Commander).Assembly,
+            };
+
+            ConfigureServices(lifestyle);
+            ConfigureSettings();
+            ConfigureMediator();
+            ConfigureMvc(RouteTable.Routes);
+        }
+
+        private static void ConfigureServices(Lifestyle lifestyle)
+        {
+            _container.Register<ContactDb>(lifestyle);
+            _container.Register<DbContext>(() => _container.GetInstance<ContactDb>());
+            _container.Register<ITokenService, TokenService>();
+        }
+
+        private static void ConfigureSettings()
+        {
+            new SettingsManager()
+                .AddProvider(new ConnectionStringsSettingsProvider())
+                .AddProvider(new AppSettingsSettingsProvider())
+                .AddSettings(_assemblies)
+                .Validate()
+                .ForEach(x => _container.RegisterSingle(x.GetType(), x));
+        }
+
+        private static void ConfigureMvc(RouteCollection routes)
+        {
+            routes.MapRoute("MvcControllers",
+                "{controller}/{action}/{id}",
+                new { controller = "Home", action = "Index", id = UrlParameter.Optional });
+
+            _container.RegisterMvcControllers(_assemblies);
+            _container.RegisterMvcIntegratedFilterProvider();
+            DependencyResolver.SetResolver(new SimpleInjectorDependencyResolver(_container));
+        }
+
+        private static void ConfigureMediator()
+        {
+            _container.RegisterSingle<IMediator>(() => new Mediator(_container.GetInstance, _container.GetAllInstances));
+            _container.RegisterManyForOpenGeneric(typeof(IRequestHandler<,>), _assemblies);
+            _container.RegisterManyForOpenGeneric(typeof(IAsyncRequestHandler<,>), _assemblies);
+            _container.RegisterManyForOpenGeneric(typeof(INotificationHandler<>), _container.RegisterAll, _assemblies);
+            _container.RegisterManyForOpenGeneric(typeof(IAsyncNotificationHandler<>), _container.RegisterAll, _assemblies);
+        }
+    };
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+TokenService.cs
+2
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Security.Cryptography;
+using System.Web;
+using System.Web.Security;
+using CfgDotNet;
+using CommandR.Authentication;
+using JWT;
+
+namespace CommanderDemo.Web
+{
+    /// <summary>
+    /// Manages Tokens for provided context data like Username
+    /// </summary>
+    internal class TokenService : ITokenService
+    {
+        private readonly Settings _settings;
+
+        public TokenService(Settings settings)
+        {
+            _settings = settings;
+        }
+
+        public string CreateToken(IDictionary<string, object> data)
+        {
+            //MVC
+            var username = (string)data["Username"];
+            FormsAuthentication.SetAuthCookie(username, true);
+
+            //JWT
+            var tokenId = JsonWebToken.Encode(data, _settings.Key, _settings.Algorithm);
+
+            //Session
+            if (HttpContext.Current.Session != null)
+                HttpContext.Current.Session["TokenId"] = tokenId;
+
+            return tokenId;
+        }
+
+        public IDictionary<string, object> GetTokenData(string tokenId)
+        {
+            if (string.IsNullOrWhiteSpace(tokenId))
+                return new Dictionary<string, object>();
+
+            try
+            {
+                var data = (IDictionary<string, object>)JsonWebToken.DecodeToObject(tokenId, _settings.Key, verify: true);
+                return new Dictionary<string, object>
+                {
+                    {"Username", TryGet(data, "Username")},
+                    {"Roles", ParseRoles(TryGet(data, "Roles"))},
+
+                };
+            }
+            catch
+            {
+                return new Dictionary<string, object>();
+            }
+        }
+
+        public void DeleteToken(string tokenId)
+        {
+            FormsAuthentication.SignOut();
+            if (HttpContext.Current.Session != null)
+            {
+                HttpContext.Current.Session.Abandon();
+            }
+        }
+
+        private static object TryGet(IDictionary<string, object> dict, string key)
+        {
+            return dict.ContainsKey(key) ? dict[key] : null;
+        }
+
+        private static string[] ParseRoles(Object roles)
+        {
+            var arrayList = roles as ArrayList;
+            if (arrayList == null)
+                return new string[0];
+
+            return (string[])arrayList.ToArray(typeof (string));
+        }
+
+        //CfgDotNet strongly-typed settingss
+        internal class Settings : BaseSettings
+        {
+            public string Key { get; set; }
+            public JwtHashAlgorithm Algorithm { get; set; }
+
+            public override void Validate()
+            {
+                //if (string.IsNullOrWhiteSpace(Key))
+                //    Key = GenerateKey();
+
+                if (string.IsNullOrWhiteSpace(Key))
+                    throw new ApplicationException("Invalid TokenService+Settings.Key");
+            }
+
+            //REF: http://stackoverflow.com/questions/16574655/generate-a-128-bit-string-in-c-sharp
+            private static string GenerateKey()
+            {
+                var bytes = new byte[100];
+                var rng = new RNGCryptoServiceProvider();
+                rng.GetBytes(bytes);
+                var key = Convert.ToBase64String(bytes);
+                return key.Substring(0, 64);
+            }
+        };
+    };
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Index.cshtml
+2
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+<h1>Home</h1>
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+_Layout.cshtml
+2
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>MediatorDemo</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, minimal-ui">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css" />
+    <script src="https://code.jquery.com/jquery-1.6.4.min.js"></script>
+</head>
+<body>
+    <nav class="navbar navbar-default">
+        <div class="container-fluid">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#bs-example-navbar-collapse-1" aria-expanded="false">
+                    <span class="sr-only">Toggle navigation</span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="/">Demo</a>
+            </div>
+            <div class="collapse navbar-collapse">
+                <ul class="nav navbar-nav">
+                    <li><a href="/">Login</a></li>
+                    @if (Request.IsAuthenticated)
+                    {
+                        <li><a href="/Home/Users">Users</a></li>
+                    }
+                </ul>
+            </div>
+        </div>
+    </nav>
+    <div class="container">
+        <div class="clearfix">
+            @RenderBody()
+        </div>
+        <footer>
+            @if (Request.IsAuthenticated)
+            {
+                @Html.ActionLink("Logout " + User.Identity.Name, "Logout", "Home")
+            }
+        </footer>
+    </div>
+</body>
+</html>
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Too Many Dependencies?
+2
+
+//Ever seen code like this?
+public class CheckoutController : StoreController {
+    public CheckoutController(
+        ISalesService salesService,
+        ICartService cartService,
+        IAccountService accountService,
+        IEmailerService emailerService,
+        IDocumentService documentService,
+        ICacheService cacheService,
+        IAddressService addressService,
+        CryptoService cryptoService,
+        IIncentiveService incentiveService
+    ) { ... }
+}
+
+http://hadihariri.com/2012/04/09/dealing-wht-the-too-many-dependencies-problem/
+
+Controllers with 60 or more constructor parameters@
+http://stackoverflow.com/questions/14511811/massive-controller-constructor-argument-list-when-using-di-in-mvc
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+HomeController
+2
+using System;
+using System.Web.Mvc;
+using CommanderDemo.Domain;
+using MediatR;
+
+namespace CommanderDemo.Web
+{
+    [Authorize]
+    public class HomeController : Controller
+    {
+        private readonly IMediator _mediator;
+
+        public HomeController(IMediator mediator)
+        {
+            _mediator = mediator;
+        }
+
+        [HttpGet]
+        public ActionResult Index()
+        {
+            return View();
+        }
+
+        [HttpGet, AllowAnonymous]
+        public ActionResult Login()
+        {
+            return View(new LoginUser());
+        }
+
+        [HttpPost, AllowAnonymous]
+        public ActionResult Login(LoginUser loginUser)
+        {
+            return Send(loginUser, x => RedirectToAction("Index"), View);
+        }
+
+        [AcceptVerbs(HttpVerbs.Get | HttpVerbs.Post), AllowAnonymous]
+        public ActionResult Logout(LogoutUser logoutUser)
+        {
+            return Send(logoutUser, x => RedirectToAction("Index"));
+        }
+
+        [HttpGet]
+        public ActionResult Users(QueryUsers queryUsers)
+        {
+            return Send(queryUsers, View);
+        }
+
+        [HttpGet]
+        public ActionResult EditUser(GetUser getUser)
+        {
+            return Send(getUser, x => View("EditUser", x));
+        }
+
+        [HttpPost]
+        public ActionResult EditUser(SaveUser saveUser)
+        {
+            return Send(saveUser, x => RedirectToAction("Users"), () => EditUser(new GetUser { Id = saveUser.Id }));
+        }
+
+        //Only Admin can delete users
+        [HttpGet]
+        public ActionResult DeleteUser(DeleteUser deleteUser)
+        {
+            return Send(deleteUser, x => RedirectToAction("Users"), () => EditUser(new GetUser { Id = deleteUser.Id }));
+        }
+
+        private ActionResult Send<T>(IRequest<T> cmd, Func<T, ActionResult> success, Func<ActionResult> failure = null)
+        {
+            try
+            {
+                var response = _mediator.Send(cmd);
+                return success(response);
+            }
+            catch (Exception ex)
+            {
+                ViewBag._Error = ex.Message;
+                return failure == null ? success(default(T)) : failure();
+            }
+        }
+    };
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+_Messages.cshtml
+2
+@model dynamic
+@{
+    var error = (string)ViewBag._Error;
+}
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">@error</div>
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Login.cshtml
+2
+@model LoginUser
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+<div class="col-md-4">
+    <h1>Login</h1>
+    @Html.Partial("_Messages")
+    <form method="POST">
+        <div class="form-group">
+            @Html.TextBoxFor(x => x.Username, new { @class = "form-control", placeholder = "Username" })
+        </div>
+        <div class="form-group">
+            @Html.PasswordFor(x => x.Password, new { @class = "form-control", placeholder = "Password" })
+        </div>
+        <button class="btn btn-lg btn-primary btn-block" type="submit">Sign in</button>
+    </form>
+</div>
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Users.cshtml
+2
+@model QueryUsers.Response
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+<form method="GET" class="form-inline">
+    @Html.ActionLink("Add User", "EditUser", null, new { @class = "btn btn-primary" })
+    <label class="checkbox">@Html.CheckBox("Inactive", Model.Query.Inactive) Inactive</label>
+    <button type="submit" class="btn btn-default">Load</button>
+</form>
+<table class="table table-striped table-hover">
+    <thead>
+        <tr>
+            <th>&nbsp;</th>
+            <th>Id</th>
+            <th>Username</th>
+            <th>IsActive</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var user in Model.Result.Items)
+        {
+            <tr>
+                <td>@Html.ActionLink("Edit", "EditUser", new { user.Id }, new { @class = "btn btn-primary" })</td>
+                <td>@user.Id</td>
+                <td>@user.Username</td>
+                <td>@user.IsActive</td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+EditUser.cshtml
+2
+@model GetUser.UserInfo
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+<div class="col-md-6">
+    <h1>Edit User</h1>
+    @Html.Partial("_Messages")
+    <form method="POST">
+        <div class="form-group">
+            @Model.Id
+        </div>
+        <div class="form-group">
+            @Html.TextBoxFor(x => x.Username, new { @class = "form-control", placeholder = "Username" })
+        </div>
+        <div class="form-group">
+            @Html.TextBoxFor(x => x.Password, new { @class = "form-control", placeholder = "Password" })
+        </div>
+        <div class="form-group checkbox">
+            <label>@Html.CheckBoxFor(x => x.IsActive) Is Active</label>
+        </div>
+        <button class="btn btn-primary" type="submit">Save User</button>
+        @Html.ActionLink("Cancel", "Users", null, new { @class = "btn btn-default" })
+        @if (Model.Id > 0)
+        {
+            @Html.ActionLink("Delete", "DeleteUser", new { Model.Id }, new { @class = "btn btn-warning" })
+        }
+    </form>
+</div>
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+LoggingHandler.cs
+2
+//_container.RegisterDecorator(typeof(IRequestHandler<,>), typeof(LoggingHandler<,>));
+using System.Diagnostics;
+using MediatR;
+using Newtonsoft.Json;
+
+namespace CommanderDemo.Web
+{
+    public class LoggingHandler<TReq, TResp> : IRequestHandler<TReq, TResp> where TReq : IRequest<TResp>
+    {
+        private readonly IRequestHandler<TReq, TResp> _inner;
+
+        public LoggingHandler(IRequestHandler<TReq, TResp> inner)
+        {
+            _inner = inner;
+        }
+
+        public TResp Handle(TReq request)
+        {
+            Debug.WriteLine("{0} (Request) ===================================\r\n{1}",
+                request.GetType().Name,
+                JsonConvert.SerializeObject(request, Formatting.Indented));
+
+            var response = _inner.Handle(request);
+
+            Debug.WriteLine("{0} (Response) ===================================\r\n{1}",
+                request.GetType().Name,
+                JsonConvert.SerializeObject(response, Formatting.Indented));
+
+            return response;
+        }
+    };
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+WebApi
+1
+
+Install-Package Microsoft.AspNet.WebApi -Version 5.2.3
+
+Install-Package Command-R.WebApi -Pre -Version 0.2.0-beta
+
+Install-Package SimpleInjector.Integration.WebApi -Version 2.8.1
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+JsonRpc
+2
+
+JsonRpc 2.0 Specification
+http://www.jsonrpc.org/specification
+
+//JsonRpcRequest
+{
+    "jsonrpc": "2.0",
+    "id": "1", 
+    "method": "Ping", 
+    "params": {
+        "Name": "Paul"
+    }
+}
+
+//JsonRpcResponse
+{
+    "jsonrpc": "2.0",
+    "id": "1",
+    "result": {
+        "Message": "Hello (async): PostMan"
+    },
+    "error": null
+}
+
+//JsonRpcError
+{
+    "code": 149850948,
+    "message": "There was an error",
+    "data": {}
+}
+
+//We added some extensions to JsonRpc: IPatchable, support for file uploads
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Global.asax.cs
+2
+using System;
+using System.Reflection;
+using System.Web;
+using System.Web.Http;
+using System.Web.Mvc;
+using System.Web.Routing;
+using CfgDotNet;
+using CommanderDemo.Domain;
+using CommandR;
+using CommandR.Authentication;
+using CommandR.WebApi;
+using MediatR;
+using SimpleInjector;
+using SimpleInjector.Extensions;
+using SimpleInjector.Extensions.LifetimeScoping;
+using SimpleInjector.Integration.Web;
+using SimpleInjector.Integration.Web.Mvc;
+using SimpleInjector.Integration.WebApi;
+
+namespace CommanderDemo.Web
+{
+    public class Global : HttpApplication
+    {
+        private static Container _container;
+        private static Assembly[] _assemblies;
+
+        protected void Application_Start(object sender, EventArgs e)
+        {
+            _container = new Container();
+            var lifestyle = Lifestyle.CreateHybrid(() => HttpContext.Current == null,
+                new LifetimeScopeLifestyle(true),
+                new WebRequestLifestyle(true));
+
+            _assemblies = new[]
+            {
+                typeof(Global).Assembly,
+                typeof(LoginUser).Assembly,
+                typeof(Commander).Assembly,
+                typeof(JsonRpcController).Assembly,
+            };
+
+            ConfigureServices(lifestyle);
+            ConfigureSettings();
+            ConfigureMediator();
+            ConfigureCommander(GlobalConfiguration.Configuration, lifestyle);
+            ConfigureWebApi(GlobalConfiguration.Configuration);
+            ConfigureMvc(RouteTable.Routes);
+
+            Commander.Initialize(_assemblies);
+            GlobalConfiguration.Configuration.EnsureInitialized();
+            _container.Verify();
+        }
+
+        //HACK: to work with MVC + API
+        protected void Application_AcquireRequestState(object sender, EventArgs e)
+        {
+            if (Context.Session == null)
+                return;
+
+            var tokenId = (string)Session["TokenId"];
+            if (tokenId == null)
+            {
+                tokenId = _container.GetInstance<IMediator>().Send(new GetUserToken
+                {
+                    Username = User.Identity.Name
+                });
+                Session["TokenId"] = tokenId;
+            }
+
+            var tokenService = _container.GetInstance<ITokenService>();
+            var dict = tokenService.GetTokenData(tokenId);
+            var appContext = new AppContext(dict)
+            {
+                RequestIsLocal = Request.IsLocal,
+            };
+            _container.GetInstance<ExecutionEnvironment>().AppContext = appContext;
+        }
+
+        private static void ConfigureServices(Lifestyle lifestyle)
+        {
+            _container.Register<ContactDb>(lifestyle);
+            _container.Register<ITokenService, TokenService>();
+        }
+
+        private static void ConfigureSettings()
+        {
+            new SettingsManager()
+                .AddProvider(new ConnectionStringsSettingsProvider())
+                .AddProvider(new AppSettingsSettingsProvider())
+                .AddSettings(_assemblies)
+                .Validate()
+                .ForEach(x => _container.RegisterSingle(x.GetType(), x));
+        }
+
+        private static void ConfigureMvc(RouteCollection routes)
+        {
+            routes.MapRoute("MvcControllers",
+                "{controller}/{action}/{id}",
+                new { controller = "Home", action = "Index", id = UrlParameter.Optional });
+
+            _container.RegisterMvcControllers(_assemblies);
+            _container.RegisterMvcIntegratedFilterProvider();
+            DependencyResolver.SetResolver(new SimpleInjectorDependencyResolver(_container));
+        }
+
+        private static void ConfigureMediator()
+        {
+            _container.RegisterSingle<IMediator>(() => new Mediator(_container.GetInstance, _container.GetAllInstances));
+            _container.RegisterManyForOpenGeneric(typeof(IRequestHandler<,>), _assemblies);
+            _container.RegisterManyForOpenGeneric(typeof(IAsyncRequestHandler<,>), _assemblies);
+            _container.RegisterManyForOpenGeneric(typeof(INotificationHandler<>), _container.RegisterAll, _assemblies);
+            _container.RegisterManyForOpenGeneric(typeof(IAsyncNotificationHandler<>), _container.RegisterAll, _assemblies);
+        }
+
+        private static void ConfigureCommander(HttpConfiguration config, Lifestyle lifestyle)
+        {
+            _container.Register<AppContext>(() => _container.GetInstance<ExecutionEnvironment>().AppContext ?? new AppContext(), lifestyle);
+            _container.Register<ExecutionEnvironment>(lifestyle);
+            _container.RegisterDecorator(typeof(IRequestHandler<,>), typeof(AuthorizationHandler<,>));
+            _container.RegisterDecorator(typeof(IAsyncRequestHandler<,>), typeof(AsyncAuthorizationHandler<,>));
+            config.Filters.Add(new ApiAuthorizationFilter());
+        }
+
+        private static void ConfigureWebApi(HttpConfiguration config)
+        {
+            _container.RegisterWebApiControllers(config, _assemblies);
+            config.DependencyResolver = new SimpleInjectorWebApiDependencyResolver(_container);
+            config.MapHttpAttributeRoutes();
+        }
+    };
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Ping.cs
+2
+using CommandR.Authentication;
+using MediatR;
+
+namespace CommanderDemo.Domain
+{
+    [AllowAnonymous]
+    public class Ping : IRequest<Ping.Pong>
+    {
+        public string Name { get; set; }
+
+        public class Pong
+        {
+            public string Message { get; set; }
+        };
+
+        internal class Handler : IRequestHandler<Ping, Pong>
+        {
+            public Pong Handle(Ping request)
+            {
+                return new Pong
+                {
+                    Message = "Hello (not async): " + request.Name,
+                };
+            }
+        }
+    };
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+AsyncPing.cs
+2
+using System.Threading.Tasks;
+using CommandR.Authentication;
+using MediatR;
+
+namespace CommanderDemo.Domain
+{
+    [AllowAnonymous]
+    public class AsyncPing : IAsyncRequest<AsyncPing.Pong>
+    {
+        public string Name { get; set; }
+
+        public class Pong
+        {
+            public string Message { get; set; }
+        };
+
+        internal class Handler : IAsyncRequestHandler<AsyncPing, Pong>
+        {
+            public Task<Pong> Handle(AsyncPing request)
+            {
+                var response = new Pong
+                {
+                    Message = "Hello (async): " + request.Name,
+                };
+                return Task.FromResult(response);
+            }
+        }
+    };
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Postman
+2
+{
+    "method": "Ping",
+    "params": {
+        "Name": "PostMan"
+    }
+}
+
+{
+    "method": "AsyncPing",
+    "params": {
+        "Name": "PostMan"
+    }
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+CommanderDemo.Console
+2
+using CommanderDemo.Domain;
+using CommandR;
+using console = System.Console;
+
+//Project Reference: CommanderDemo.Domain
+//Solution Nuget: Command-R
+namespace CommanderDemo.Console
+{
+    internal class Program
+    {
+        private static void Main()
+        {
+            var client = new JsonRpcClient("http://localhost:51460/jsonrpc");
+            var ping = new Ping { Name = "Console" };
+            var pong = client.Send(ping);
+            console.WriteLine(pong.Message);
+            console.ReadKey();
+        }
+    };
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Powershell
+2
+cls
+$uri = "http://localhost:51460/jsonrpc"
+
+Function Main() {
+    $loginUser = New-Object PSObject -Property @{
+        Username="Admin"; 
+        Password="password";
+    }
+    $tokenId = JsonRpc $uri null "LoginUser" $loginUser
+    $queryUsers = New-Object PSObject -Property @{
+        Inactive=$true;
+    }
+    $response = JsonRpc $uri $tokenId "QueryUsers" $queryUsers
+    Write-Host ($response.Result.Items | Format-Table | Out-String)
+}
+
+Function JsonRpc([String] $uri, [String] $tokenId, [String] $method, [PSObject] $params) {
+    $json = New-Object PSObject -Property @{method=$method; params=$params} | ConvertTo-Json
+    $response = (Invoke-WebRequest -uri $uri -Headers @{"Authorization"=$tokenId} -Method POST -Body $json).Content | ConvertFrom-Json
+    if ($response.result -ne $null) { return $response.result } 
+    else { throw $response.error.message }
+}
+
+Main
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Aurelia
+1
+
+Aurelia
+* Gulp build automatically creates source maps from Babel ES6/7 so in chrome you can set breakpoints as usual
+
+Extract app-contacts-master.zip
+
+npm install
+
+jspm install
+
+Move index.html to Views\Home\Index.cshtml
+
+Task Runner Explorer set gulpfile.js "build" to run After Build
+
+demo contacts app as it is
+
+jspm install aurelia-http-client
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+QueryContacts.cs
+2
+using System.Linq;
+using CommandR.Authentication;
+using CommandR.Extensions;
+using MediatR;
+
+namespace CommanderDemo.Domain
+{
+    [Authorize]
+    public class QueryContacts : IPageable, IRequest<PagedList<QueryContacts.ContactInfo>>
+    {
+        public string Search { get; set; }
+        public int? PageNumber { get; set; }
+        public int? PageSize { get; set; }
+
+        public class ContactInfo
+        {
+            public int Id { get; set; }
+            public string FirstName { get; set; }
+            public string LastName { get; set; }
+            public string Email { get; set; }
+        };
+
+        internal class Handler : IRequestHandler<QueryContacts, PagedList<ContactInfo>>
+        {
+            private readonly ContactDb _db;
+
+            public Handler(ContactDb db)
+            {
+                _db = db;
+            }
+
+            public PagedList<ContactInfo> Handle(QueryContacts cmd)
+            {
+                var query = _db.Contacts.AsQueryable();
+
+                if (!string.IsNullOrEmpty(cmd.Search))
+                {
+                    int id;
+                    int.TryParse(cmd.Search, out id);
+                    query = query.Where(x => x.Id == id
+                                             || x.FirstName.Contains(cmd.Search)
+                                             || x.LastName.Contains(cmd.Search)
+                                             || x.Email.Contains(cmd.Search)
+                                             || x.PhoneNumber == cmd.Search);
+                }
+
+                return query
+                    .Select(x => new ContactInfo
+                    {
+                        Id = x.Id,
+                        FirstName = x.FirstName,
+                        LastName = x.LastName,
+                        Email = x.Email,
+                    })
+                    .OrderBy(x => x.Id)
+                    .ToPagedList(cmd, 25, 100);
+            }
+        }
+    };
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+GetContact.cs
+2
+using CommandR.Authentication;
+using MediatR;
+
+namespace CommanderDemo.Domain
+{
+    [Authorize]
+    public class GetContact : IRequest<Contact>
+    {
+        public int Id { get; set; }
+
+        internal class Handler : IRequestHandler<GetContact, Contact>
+        {
+            private readonly ContactDb _db;
+
+            public Handler(ContactDb db)
+            {
+                _db = db;
+            }
+
+            public Contact Handle(GetContact cmd)
+            {
+                return _db.Contacts.Find(cmd.Id) ?? new Contact();
+            }
+        };
+    };
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+SaveContact.cs
+2
+using System;
+using CommandR.Authentication;
+using CommandR.Extensions;
+using MediatR;
+
+namespace CommanderDemo.Domain
+{
+    [Authorize]
+    public class SaveContact : IRequest<int>
+    {
+        public int Id { get; set; }
+        public string FirstName { get; set; }
+        public string LastName { get; set; }
+        public string Email { get; set; }
+        public string PhoneNumber { get; set; }
+
+        internal class Handler : IRequestHandler<SaveContact, int>
+        {
+            private readonly ContactDb _db;
+
+            public Handler(ContactDb db)
+            {
+                _db = db;
+            }
+
+            public int Handle(SaveContact cmd)
+            {
+                if (string.IsNullOrWhiteSpace(cmd.Email))
+                    throw new ApplicationException("Invalid email: " + cmd.Email);
+
+                if (string.IsNullOrWhiteSpace(cmd.PhoneNumber))
+                    throw new ApplicationException("Invalid phone: " + cmd.PhoneNumber);
+
+                var contact = _db.Contacts.Find(cmd.Id)
+                              ?? new Contact();
+
+                cmd.CopyTo(contact);
+                if (contact.Id == 0) _db.Contacts.Add(contact);
+                _db.SaveChanges();
+
+                return contact.Id;
+            }
+        };
+    };
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+DeleteContact.cs
+2
+using CommandR.Authentication;
+using MediatR;
+
+namespace CommanderDemo.Domain
+{
+    [Authorize]
+    public class DeleteContact : IRequest<bool>
+    {
+        public int Id { get; set; }
+
+        internal class Handler : IRequestHandler<DeleteContact, bool>
+        {
+            private readonly ContactDb _db;
+
+            public Handler(ContactDb db)
+            {
+                _db = db;
+            }
+
+            public bool Handle(DeleteContact cmd)
+            {
+                var contact = _db.Contacts.Find(cmd.Id);
+                _db.Contacts.Remove(contact);
+                _db.SaveChanges();
+                return true;
+            }
+        }
+    };
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Index.cshtml
+2
+<!doctype html>
+<html>
+<head>
+    <link rel="stylesheet" type="text/css" href="/jspm_packages/github/twbs/bootstrap@3.3.4/css/bootstrap.min.css">
+    <link rel="stylesheet" type="text/css" href="/styles/styles.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body aurelia-app>
+    <div class="splash">
+        <div class="message">Aurelia Contacts</div>
+        <i class="fa fa-spinner fa-spin"></i>
+    </div>
+    <script src="jspm_packages/system.js"></script>
+    <script src="config.js"></script>
+    <script>
+        System.config({
+            "paths": {
+                "*": "dist/*.js"
+            }
+        });
+    </script>
+    <script>
+        System.import('aurelia-bootstrapper');
+    </script>
+    <script>
+        window.JsonRpcToken = "@Session["TokenId"]";
+    </script>
+</body>
+</html>
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+json-rpc.js
+2
+import {HttpClient} from 'aurelia-http-client';
+
+class Request {
+    constructor(method, params) {
+        this.jsonrpc = "2.0";
+        this.id = guid();
+        this.method = method;
+        this.params = params || {};
+    }
+}
+
+class Response {
+    constructor(response) {
+        this.jsonrpc = response.jsonrpc;
+        this.id = response.id;
+        this.result = response.result;
+        this.error = response.error;
+    }
+}
+
+function guid() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
+}
+
+export class JsonRpc {
+    static inject = [HttpClient];
+    constructor(http) {
+        this.http = http;
+    }
+
+    send(method, params) {
+        return new Promise((resolve, reject) => {
+            return this.http
+            .createRequest('/jsonrpc')
+            .asPost()
+            .withHeader('Authorization', window.JsonRpcToken)
+            .withContent(new Request(method, params))
+            .send()
+            .then(response => {
+                var resp = new Response(response.content);
+                if (resp.error) {
+                    reject(resp.error);
+                }else {
+                    resolve(resp.result);
+                }
+            }).catch(error => {
+                reject(error);
+            });
+        });
+    }
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+web-api.js
+2
+import {inject} from 'aurelia-framework';
+import {JsonRpc} from 'json-rpc';
+
+function map(contact) {
+    return {
+        id: contact.Id,
+        firstName: contact.FirstName,
+        lastName: contact.LastName,
+        email: contact.Email,
+        phoneNumber: contact.PhoneNumber
+    }
+}
+
+@inject(JsonRpc)
+export class WebAPI {
+    jsonRpc;
+
+    constructor(jsonRpc) {
+        this.jsonRpc = jsonRpc;
+    }
+
+    getContactList() {
+        this.isRequesting = true;
+        return new Promise((resolve, reject) => {
+            this.jsonRpc.send('QueryContacts').then(resp => {
+                this.isRequesting = false;
+                resolve(resp.Items.map(map));
+            }).catch(error => {
+                this.isRequesting = false;
+                console.log("getContactList ERROR", error);
+                alert(error.message);
+                reject(error);
+            });
+        });
+    }
+
+    getContactDetails(id) {
+        this.isRequesting = true;
+        return new Promise((resolve, reject) => {
+            this.jsonRpc.send('GetContact', {Id:id}).then(resp => {
+                this.isRequesting = false;
+                resolve(map(resp));
+            }).catch(error => {
+                this.isRequesting = false;
+                console.log("getContactDetails ERROR", error);
+                alert(error.message);
+                reject(error);
+            });
+        });
+    }
+
+    saveContact(contact) {
+        this.isRequesting = true;
+        return new Promise((resolve, reject) => {
+            this.jsonRpc.send('SaveContact', contact).then(id => {
+                this.jsonRpc.send('GetContact', {Id:id}).then(resp => {
+                    this.isRequesting = false;
+                    resolve(map(resp));
+                });
+            }).catch(error => {
+                this.isRequesting = false;
+                console.log("saveContact ERROR", error);
+                alert(error.message);
+                reject(error);
+            });
+        });
+    }
+
+    deleteContact(contact) {
+        this.isRequesting = true;
+        return new Promise((resolve, reject) => {
+            this.jsonRpc.send('DeleteContact', {Id:contact.id}).then(resp => {
+                this.isRequesting = false;
+                resolve(resp);
+            }).catch(error => {
+                this.isRequesting = false;
+                console.log("deleteContact ERROR", error);
+                alert(error.message);
+                reject(error);
+            });
+        });
+    }
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+app.js
+2
+import {WebAPI} from './web-api';
+
+export class App {
+    static inject = [WebAPI];
+    constructor(api) {
+        this.api = api;
+    }
+
+    configureRouter(config, router){
+        config.title = 'Contacts';
+        config.map([
+            { route: '',              moduleId: 'no-selection',   name:'home',    title: 'Select'},
+            { route: 'contacts/:id',  moduleId: 'contact-detail', name:'contacts'                }
+        ]);
+
+        this.router = router;
+    }
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+contact-list.js
+2
+import {EventAggregator} from 'aurelia-event-aggregator';
+import {WebAPI} from './web-api';
+import {ContactUpdated, ContactViewed} from './messages';
+import {Router} from 'aurelia-router';
+
+export class ContactList {
+    static inject = [WebAPI, EventAggregator, Router];
+    constructor(api, ea, router){
+        this.api = api;
+        this.contacts = [];
+        this.router = router;
+
+        ea.subscribe(ContactViewed, msg => this.select(msg.contact));
+        ea.subscribe(ContactUpdated, msg => {
+            this.api.getContactList().then(contacts => {
+                this.contacts = contacts;
+                if (!msg.contact) {
+                    this.router.navigateToRoute('home');
+                } else if (msg.contact.id !== this.selectedId) {
+                    this.router.navigateToRoute('contacts', {id:msg.contact.id});
+                }
+            }).catch(function(){});
+        });
+    }
+
+    created(){
+        this.api.getContactList().then(contacts => {
+            this.contacts = contacts;
+        }).catch(function(){});
+    }
+
+    select(contact){
+        this.selectedId = contact.id;
+        return true;
+    }
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+contact-list.html
+2
+<template>
+    <div class="contact-list">
+        <p><a route-href="route: contacts; params.bind: {id:0}">Create Contact</a></p>
+        <ul class="list-group">
+            <li repeat.for="contact of contacts" class="list-group-item ${contact.id === $parent.selectedId ? 'active' : ''}">
+                <a route-href="route: contacts; params.bind: {id:contact.id}" click.delegate="$parent.select(contact)">
+                    <h4 class="list-group-item-heading">${contact.firstName} ${contact.lastName}</h4>
+                    <p class="list-group-item-text">${contact.email}</p>
+                </a>
+            </li>
+        </ul>
+    </div>
+</template>
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+contact-detail.js
+2
+import {EventAggregator} from 'aurelia-event-aggregator';
+import {WebAPI} from './web-api';
+import {ContactUpdated,ContactViewed} from './messages';
+import {areEqual} from './utility';
+
+export class ContactDetail {
+    static inject = [WebAPI, EventAggregator];
+    constructor(api, ea){
+        this.api = api;
+        this.ea = ea;
+    }
+
+    activate(params, config){
+        return this.api.getContactDetails(params.id).then(contact => {
+            this.contact = contact;
+            config.navModel.setTitle(contact.firstName);
+            this.originalContact = JSON.parse(JSON.stringify(contact));
+            this.ea.publish(new ContactViewed(contact));
+        }).catch(function(){});
+    }
+
+    get canSave(){
+        return this.contact.firstName && this.contact.lastName && !this.api.isRequesting;
+    }
+
+    save(){
+        this.api.saveContact(this.contact).then(contact => {
+            this.contact = contact;
+            this.originalContact = JSON.parse(JSON.stringify(contact));
+            this.ea.publish(new ContactUpdated(this.contact));
+        }).catch(function(){});
+    }
+
+    get canDelete(){
+        return !!this.contact.id;
+    }
+
+    delete(){
+        this.api.deleteContact(this.contact).then(contact => {
+            this.ea.publish(new ContactUpdated(null));
+        }).catch(function(){});
+    }
+
+    canDeactivate(){
+        if(!areEqual(this.originalContact, this.contact)){
+            let result = confirm('You have unsaved changes. Are you sure you wish to leave?');
+
+            if(!result){
+                this.ea.publish(new ContactViewed(this.contact));
+            }
+
+            return result;
+        }
+
+        return true;
+    }
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+contact-detail.html
+2
+<template>
+    <div class="panel panel-primary">
+        <div class="panel-heading">
+            <h3 class="panel-title">Profile</h3>
+        </div>
+        <div class="panel-body">
+            <form role="form" class="form-horizontal">
+                <div class="form-group">
+                    <label class="col-sm-2 control-label">First Name</label>
+                    <div class="col-sm-10">
+                        <input type="text" placeholder="first name" class="form-control" value.bind="contact.firstName">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="col-sm-2 control-label">Last Name</label>
+                    <div class="col-sm-10">
+                        <input type="text" placeholder="last name" class="form-control" value.bind="contact.lastName">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="col-sm-2 control-label">Email</label>
+                    <div class="col-sm-10">
+                        <input type="text" placeholder="email" class="form-control" value.bind="contact.email">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="col-sm-2 control-label">Phone Number</label>
+                    <div class="col-sm-10">
+                        <input type="text" placeholder="phone number" class="form-control" value.bind="contact.phoneNumber">
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div class="button-bar">
+        <button class="btn btn-danger" click.delegate="delete()" disabled.bind="!canDelete">Delete</button>
+        <button class="btn btn-success" click.delegate="save()" disabled.bind="!canSave">Save</button>
+    </div>
+</template>
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+TestQueryContacts.cs
+2
+using System.Linq;
+using CommanderDemo.Domain;
+using FakeItEasy;
+using Shouldly;
+using Xunit;
+
+namespace CommanderDemo.Test
+{
+    public class TestQueryContacts
+    {
+        private readonly QueryContacts.Handler _handler;
+
+        public TestQueryContacts()
+        {
+            var contacts = new[]
+            {
+                new Contact {Id = 1, FirstName = "A", LastName = "B", Email = "C", PhoneNumber = "6"},
+                new Contact {Id = 2, FirstName = "D", LastName = "E", Email = "F", PhoneNumber = "7"},
+                new Contact {Id = 3, FirstName = "G", LastName = "H", Email = "I", PhoneNumber = "8"},
+                new Contact {Id = 4, FirstName = "J", LastName = "K", Email = "L", PhoneNumber = "9"},
+                new Contact {Id = 5, FirstName = "M", LastName = "N", Email = "O", PhoneNumber = "0"}
+            }.ToDbSet();
+
+            var db = A.Fake<ContactDb>();
+            A.CallTo(() => db.Contacts).Returns(contacts);
+
+            _handler = new QueryContacts.Handler(db);
+        }
+
+        [Fact]
+        public void Test_QueryContacts_Returns_All_By_Default()
+        {
+            var request = new QueryContacts();
+            var response = _handler.Handle(request);
+            response.Items.Count().ShouldBe(5);
+        }
+
+        [Fact]
+        public void Test_QueryContacts_Search_Id()
+        {
+            var request = new QueryContacts { Search = "1" };
+            var response = _handler.Handle(request);
+            response.Items.Single().Id.ShouldBe(1);
+        }
+
+        [Fact]
+        public void Test_QueryContacts_Search_FirstName()
+        {
+            var request = new QueryContacts { Search = "D" };
+            var response = _handler.Handle(request);
+            response.Items.Single().Id.ShouldBe(2);
+        }
+
+        [Fact]
+        public void Test_QueryContacts_Search_LastName()
+        {
+            var request = new QueryContacts { Search = "H" };
+            var response = _handler.Handle(request);
+            response.Items.Single().Id.ShouldBe(3);
+        }
+
+        [Fact]
+        public void Test_QueryContacts_Search_Email()
+        {
+            var request = new QueryContacts { Search = "L" };
+            var response = _handler.Handle(request);
+            response.Items.Single().Id.ShouldBe(4);
+        }
+
+        [Fact]
+        public void Test_QueryContacts_Search_Phone()
+        {
+            var request = new QueryContacts { Search = "0" };
+            var response = _handler.Handle(request);
+            response.Items.Single().Id.ShouldBe(5);
+        }
+
+        [Fact]
+        public void Test_QueryContacts_Paging()
+        {
+            var request = new QueryContacts { PageNumber = 3, PageSize = 1 };
+            var response = _handler.Handle(request);
+            response.Items.Single().Id.ShouldBe(3);
+        }
+    };
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Command-R.MongoQueue
+1
+
+MongoQueueService uses MongoDb tailable cursor to provide queue mechanism.
+http://docs.mongodb.org/manual/tutorial/create-tailable-cursor/
+
+Note: For tailable cursor collections to work, they need at least one item (noop)
+https://github.com/Command-R/Command-R/blob/master/CommandR.MongoQueue/MongoQueueService.cs
+
+Install-Package Command-R.MongoQueue -Pre -Version 0.2.0-beta
+
+Install-Package FluentScheduler -Version 3.1.45
+
+Start Mongo
+Start Smtp4dev
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+SendEmail.cs
+2
+using System.Net.Mail;
+using System.Threading.Tasks;
+using CommandR.Authentication;
+using MediatR;
+
+namespace CommanderDemo.Domain
+{
+    [Authorize]
+    public class SendEmail : IAsyncRequest<Unit>
+    {
+        public string To { get; set; }
+        public string Subject { get; set; }
+        public string Body { get; set; }
+
+        internal class Handler : IAsyncRequestHandler<SendEmail, Unit>
+        {
+            public async Task<Unit> Handle(SendEmail sendEmail)
+            {
+                var email = new MailMessage();
+                email.To.Add(sendEmail.To);
+                email.Subject = sendEmail.Subject;
+                email.Body = sendEmail.Body;
+
+                var smtp = new SmtpClient();
+                await smtp.SendMailAsync(email);
+
+                return Unit.Value;
+            }
+        };
+    };
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+SaveContact.cs
+2
+
+public Handler(ContactDb db, AppContext appContext, IQueueService queue)
+{
+    _db = db;
+    _appContext = appContext;
+    _queue = queue;
+}
+
+var contactInfo = contact.GetType().GetProperties().Select(x => x.Name + ": " + x.GetValue(contact));
+_queue.Enqueue(new SendEmail
+{
+    To = "paul@paulwheeler.com",
+    Subject = "Contact Saved",
+    Body = string.Join(Environment.NewLine, contactInfo),
+}, _appContext);
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Global.asax
+2
+
+//Application_Start
+
+typeof(MongoQueueService).Assembly,
+
+TaskManager.Initialize(new TaskRegistry(_container));
+
+
+private static void ConfigureServices(Lifestyle lifestyle)
+{
+    _container.Register<ContactDb>(lifestyle);
+    _container.Register<ITokenService, TokenService>();
+    _container.RegisterSingle<IQueueService, MongoQueueService>();
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+TaskRegistry.cs
+2
+using System.Diagnostics;
+using CommanderDemo.Domain;
+using CommandR;
+using CommandR.Authentication;
+using CommandR.Services;
+using FluentScheduler;
+using MediatR;
+using SimpleInjector;
+
+namespace CommanderDemo.Web
+{
+    public class TaskRegistry : Registry
+    {
+        private readonly Container _container;
+        private readonly IMediator _mediator;
+        private readonly Commander _commander;
+
+        public TaskRegistry(Container container)
+        {
+            _container = container;
+            _mediator = _container.GetInstance<IMediator>();
+            _commander = _container.GetInstance<Commander>();
+            var admin = new AppContext { Username = "Admin" };
+
+            Schedule(() =>
+            {
+                var cancellation = new System.Threading.CancellationTokenSource();
+                var queueService = _container.GetInstance<IQueueService>();
+                queueService.StartProcessing(cancellation.Token, Execute);
+            }).ToRunOnceIn(5).Seconds();
+
+            Schedule(() =>
+            {
+                var response = Send(new Ping { Name = "Schedule" }, admin);
+                Debug.WriteLine(response.Message);
+            }).ToRunNow().AndEvery(5).Seconds();
+        }
+
+        private void Execute(object command, AppContext context)
+        {
+            using (_container.BeginLifetimeScope())
+            {
+                _container.GetInstance<ExecutionEnvironment>().AppContext = context;
+                _commander.Send(command).Wait();
+            }
+        }
+
+        private T Send<T>(IRequest<T> command, AppContext appContext)
+        {
+            using (_container.BeginLifetimeScope())
+            {
+                _container.GetInstance<ExecutionEnvironment>().AppContext = appContext;
+                return _mediator.Send(command);
+            }
+        }
+    };
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Signal-R Notifications
+1
+
+Install-Package Microsoft.AspNet.SignalR -Version 2.2.0
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Index.cshtml
+2
+
+<script src="~/Scripts/jquery-1.6.4.js"></script>
+<script src="~/Scripts/jquery.signalR-2.2.0.js"></script>
+<script src="~/signalr/hubs"></script>
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Startup.cs
+2
+using Owin;
+
+namespace CommanderDemo.Web
+{
+    public class Startup
+    {
+        public void Configuration(IAppBuilder app)
+        {
+            app.MapSignalR();
+        }
+    };
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+NotificationHub.cs
+2
+using Microsoft.AspNet.SignalR;
+
+namespace CommanderDemo.Web
+{
+    public class NotificationHub : Hub
+    {
+    };
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Alert.cs
+2
+using MediatR;
+
+namespace CommanderDemo.Domain
+{
+    public class Alert : INotification
+    {
+        public string Message { get; set; }
+
+        internal class Handler : INotificationHandler<Alert>
+        {
+            public void Handle(Alert notification)
+            {
+                //HACK: empty handler
+            }
+        };
+    };
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+SignalrHandler
+2
+using MediatR;
+using Microsoft.AspNet.SignalR;
+
+namespace CommanderDemo.Web
+{
+    public class SignalrHandler<T> : INotificationHandler<T> where T : INotification
+    {
+        public SignalrHandler(INotificationHandler<T> inner)
+        {
+            //inner parameter required for container registration
+        }
+
+        public void Handle(T notification)
+        {
+            var hub = GlobalHost.ConnectionManager.GetHubContext<NotificationHub>();
+            hub.Clients.All.publish(notification);
+        }
+    };
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Global.asax
+2
+
+//ConfigureMediator
+_container.RegisterDecorator(typeof(INotificationHandler<>), typeof(SignalrHandler<>));
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+SaveContact.cs
+2
+
+_mediator.Publish(new Alert { Message = "Contact Saved: " + contact.Id });
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+notifications.js
+2
+import {EventAggregator} from 'aurelia-event-aggregator';
+import {ContactUpdated} from './messages';
+
+export class Notifications {
+    static inject = [EventAggregator];
+    constructor(ea) {
+        $(function () {
+            var hub = $.connection.notificationHub;
+
+            hub.client.publish = function(message) {
+                setTimeout(function() {
+                    alert(message.Message);
+                    ea.publish(new ContactUpdated(null));
+                }, 1);
+            }
+
+            $.connection.hub.logging = true;
+            $.connection.hub.url = "/signalr";
+            $.connection.hub.start().done(function(resp) {
+                console.log("SignalR Connected");
+                console.log(resp);
+            }).fail(function(err) {
+                console.log("SignalR Connect ERROR");
+                console.log(err);
+            });
+        });
+    }
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+app,js
+2
+import {WebAPI} from './web-api';
+import {Notifications} from './notifications';
+
+export class App {
+  static inject = [WebAPI, Notifications];
+  constructor(api, notifications) {
+    this.api = api;
+    this.notifications = notifications;
+  }
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+SaveContact.ps1
+2
+cls
+$uri = "http://localhost:51460/jsonrpc"
+
+Function Main() {
+    $login = New-Object PSObject -Property @{
+        Username = "Admin"; 
+        Password = "password";
+    }
+    $tokenId = JsonRpc $uri null "LoginUser" $login
+
+    $guid = [guid]::NewGuid().ToString("N").Substring(10)
+    $saveContact = New-Object PSObject -Property @{
+        FirstName = "Test";
+        LastName = $guid;
+        Email = "test@example.com";
+        PhoneNumber = "5551212";
+    }
+    $id = JsonRpc $uri $tokenId "SaveContact" $saveContact
+    Write-Host $id
+}
+
+Function JsonRpc([String] $uri, [String] $tokenId, [String] $method, [PSObject] $params) {
+    $json = New-Object PSObject -Property @{method=$method; params=$params} | ConvertTo-Json
+    $response = (Invoke-WebRequest -uri $uri -Headers @{"Authorization"=$tokenId} -Method POST -Body $json).Content | ConvertFrom-Json
+    if ($response.result -ne $null) { return $response.result } 
+    else { throw $response.error.message }
+}
+
+Main
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+TestSaveContact.cs
+2
+using System;
+using CommanderDemo.Domain;
+using CommandR.Authentication;
+using CommandR.Services;
+using FakeItEasy;
+using MediatR;
+using Shouldly;
+using Xunit;
+
+namespace CommanderDemo.Test
+{
+    public class TestSaveContact
+    {
+        private readonly ContactDb _db;
+        private readonly AppContext _appContext;
+        private readonly IQueueService _queue;
+        private readonly IMediator _mediator;
+        private readonly SaveContact.Handler _handler;
+
+        public TestSaveContact()
+        {
+            var contacts = new[]
+            {
+                new Contact
+                {
+                    Id = 1,
+                    FirstName = "First",
+                    LastName = "Last",
+                    Email = "test@example.com",
+                    PhoneNumber = "555-1212"
+                },
+            }.ToDbSet();
+
+            _db = A.Fake<ContactDb>();
+            A.CallTo(() => _db.Contacts).Returns(contacts);
+
+            _appContext = A.Fake<AppContext>();
+            _queue = A.Fake<IQueueService>();
+            _mediator = A.Fake<IMediator>();
+
+            _handler = new SaveContact.Handler(_db, _appContext, _queue, _mediator);
+        }
+
+        [Fact]
+        public void Test_SaveContact_Requires_Email()
+        {
+            var request = new SaveContact
+            {
+                FirstName = "First",
+                LastName = "Last",
+                Email = null,
+                PhoneNumber = "555-1212",
+            };
+            Should.Throw<ApplicationException>(() => _handler.Handle(request));
+        }
+
+        [Fact]
+        public void Test_SaveContact_Requires_Phone()
+        {
+            var request = new SaveContact
+            {
+                FirstName = "First",
+                LastName = "Last",
+                Email = "test@example.com",
+                PhoneNumber = null,
+            };
+            Should.Throw<ApplicationException>(() => _handler.Handle(request));
+        }
+
+        [Fact]
+        public void Test_SaveContact_Creates_New_Contact()
+        {
+            var request = new SaveContact
+            {
+                FirstName = "First",
+                LastName = "Last",
+                Email = "test@example.com",
+                PhoneNumber = "555-1212",
+            };
+            var response = _handler.Handle(request);
+            response.ShouldBe(2);
+        }
+
+        [Fact]
+        public void Test_SaveContact_Enqueues_Email()
+        {
+            var request = new SaveContact
+            {
+                Id = 1,
+                FirstName = "First",
+                LastName = "Last",
+                Email = "test@example.com",
+                PhoneNumber = "555-1212",
+            };
+
+            var queue = A.Fake<IQueueService>();
+            var handler = new SaveContact.Handler(_db, _appContext, queue, _mediator);
+            handler.Handle(request);
+
+            A.CallTo(() => queue.Enqueue(A<SendEmail>._, _appContext)).MustHaveHappened(Repeated.Exactly.Once);
+        }
+
+        [Fact]
+        public void Test_SaveContact_Publishes_Alert()
+        {
+            var request = new SaveContact
+            {
+                Id = 1,
+                FirstName = "First",
+                LastName = "Last",
+                Email = "test@example.com",
+                PhoneNumber = "555-1212",
+            };
+
+            var mediator = A.Fake<IMediator>();
+            var handler = new SaveContact.Handler(_db, _appContext, _queue, mediator);
+            handler.Handle(request);
+
+            A.CallTo(() => mediator.Publish(A<Alert>._)).MustHaveHappened(Repeated.Exactly.Once);
+        }
+    };
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+More
+1
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+api.tt
+2
+<#@ Template Language="C#" Debug="true" HostSpecific="true" #>
+<#@ Output Extension=".js" #>
+<#@ Assembly Name="System.Core" #>
+<#@ Assembly Name="EnvDTE" #>
+<#@ Import Namespace="EnvDTE" #>
+<#@ Import Namespace="System.Linq" #>
+<#@ Import Namespace="System.Collections.Generic" #>
+<#
+    // Generate a jsonRpc call for every ICommand or IQuery in the system.
+    const string fileInProject = "ContactDb.cs";
+    // TEMPLATE //
+#>
+angular.module("app").service("api", [
+    'jsonRpc',
+    function (jsonRpc) {
+        var self = {};
+<#
+    foreach (var rpc in GetRpcs(fileInProject)) {
+#>
+        self.<#= rpc.FormattedName #> = function() {
+            return jsonRpc.send("<#= rpc.Name #>", Array.prototype.slice.call(arguments));
+        };
+<#
+    }
+#>
+        return self;
+    }
+]);
+<#+ // SHARED CODE //
+    public class Rpc {
+        public string Name { get; set; }
+        public string FormattedName { get; set; }
+    };
+
+    public IEnumerable<Rpc> GetRpcs(string fileInProject)
+    {
+        var list = new List<Rpc>();
+        var requests = GetClasses(fileInProject).Where(cl => cl.ImplementedInterfaces.Cast<CodeInterface>().Any(i => i.Name.Contains("ICommand") || i.Name.Contains("IQuery")));
+        foreach (var req in requests)
+        {
+            list.Add(new Rpc {
+                Name = req.Name,
+                FormattedName = req.Name,
+            });
+        }
+        return list;
+    }
+
+    //REF: http://www.codeproject.com/Articles/39071/Declarative-Dependency-Property-Definition-with-T4.aspx
+    public IEnumerable<CodeClass> GetClasses(string fileInProject) {
+        var hostServiceProvider = (IServiceProvider)Host;
+        var dte = (EnvDTE.DTE)hostServiceProvider.GetService(typeof(EnvDTE.DTE));
+        var containingProjectItem = dte.Solution.FindProjectItem(fileInProject);
+        var project = containingProjectItem.ContainingProject;
+        var elements = CodeElementsInProjectItems(project.ProjectItems);
+        return elements.Where(el => el.Kind == vsCMElement.vsCMElementClass).Cast<CodeClass>();
+    }
+    public IEnumerable<CodeFunction> GetMethods(CodeClass codeClass) {
+        foreach (CodeElement codeElement in codeClass.Members) {
+            if (codeElement.Kind == vsCMElement.vsCMElementFunction) {
+                yield return (CodeFunction)codeElement;
+            }
+        }
+    }
+    public IEnumerable<CodeElement> CodeElementsInProjectItems(ProjectItems projectItems) {
+        foreach (ProjectItem projectItem in projectItems) {
+            foreach (CodeElement el in CodeElementsInProjectItem(projectItem)) {
+                yield return el;
+            }
+        }
+    }
+    public IEnumerable<CodeElement> CodeElementsInProjectItem(ProjectItem projectItem) {
+        FileCodeModel fileCodeModel = projectItem.FileCodeModel;
+         if (fileCodeModel != null) {
+            foreach (CodeElement codeElement in fileCodeModel.CodeElements) {
+                foreach(CodeElement el in CodeElementDescendantsAndSelf(codeElement)) {
+                    yield return el;
+                }
+            }
+        }
+        if (projectItem.ProjectItems != null) {
+            foreach (ProjectItem childItem in projectItem.ProjectItems) {
+                foreach (CodeElement el in CodeElementsInProjectItem(childItem)) {
+                    yield return el;
+                }
+            }
+        }
+    }
+    public IEnumerable<CodeElement> CodeElementsDescendants(CodeElements codeElements) {
+        foreach(CodeElement element in codeElements) {
+            foreach (CodeElement descendant in CodeElementDescendantsAndSelf(element)) {
+                yield return descendant;
+            }
+        }
+    }
+    public IEnumerable<CodeElement> CodeElementDescendantsAndSelf(CodeElement codeElement) {
+        yield return codeElement;
+        CodeElements codeElements;
+        switch(codeElement.Kind) {
+            /* namespaces */
+            case vsCMElement.vsCMElementNamespace: {
+                CodeNamespace codeNamespace = (CodeNamespace)codeElement;
+                codeElements = codeNamespace.Members;
+                foreach(CodeElement descendant in CodeElementsDescendants(codeElements)) {
+                    yield return descendant;
+                }
+                break;
+            }
+            /* Process classes */
+            case vsCMElement.vsCMElementClass: {
+                CodeClass codeClass = (CodeClass)codeElement;
+                codeElements = codeClass.Members;
+                foreach(CodeElement descendant in CodeElementsDescendants(codeElements)) {
+                    yield return descendant;
+                }
+                break;
+            }
+        }
+    }
+    public IEnumerable<CodeAttribute> Attributes(CodeClass codeClass) {
+        foreach (CodeElement element in codeClass.Attributes) {
+            yield return (CodeAttribute)element;
+        }
+    }
+    public IEnumerable<CodeAttribute> Attributes(CodeFunction codeFunction) {
+        foreach (CodeElement element in codeFunction.Attributes) {
+            yield return (CodeAttribute)element;
+        }
+    }
+#>
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+CalcIncomeStmt.cs
+2
+/*
+  You could easily code generate commands from t-sql Table-Valued Functions.
+  The Request contains the inputs, the Response is a list of the rows returned.
+*/
+using System;
+using System.Collections.Generic;
+using Common;
+using MediatR;
+
+namespace Dashboard
+{
+    public class CalcIncomeStmt : IRequest<List<CalcIncomeStmt.Item>>
+    {
+        public int? UserId { get; set; }
+        public int? ClientId { get; set; }
+        public DateTime StartDate { get; set; }
+        public DateTime EndDate { get; set; }
+        public int? SheetDim1 { get; set; }
+        public int? SheetDim2 { get; set; }
+        public int? SheetDim3 { get; set; }
+        public int? SheetDim4 { get; set; }
+        public int? SheetDim5 { get; set; }
+        public int? CategoryId { get; set; }
+        public int? LineDim1 { get; set; }
+        public int? LineDim2 { get; set; }
+        public int? LineDim3 { get; set; }
+        public string RowView { get; set; }
+        public string ColView { get; set; }
+
+        public class Item
+        {
+            public int Id { get; set; }
+            public string WorksheetType { get; set; }
+            public string AccountType { get; set; }
+            public string Row { get; set; }
+            public string Col { get; set; }
+            public decimal Value { get; set; }
+        };
+
+        internal class Handler : IRequestHandler<CalcIncomeStmt, List<Item>>
+        {
+            private readonly IAppContext _appContext;
+            private readonly DashboardDb _db;
+
+            public Handler(IAppContext appContext, DashboardDb db)
+            {
+                _appContext = appContext;
+                _db = db;
+            }
+
+            public List<Item> Handle(CalcIncomeStmt cmd)
+            {
+                if (cmd.UserId == null)
+                    cmd.UserId = _appContext.User.Id;
+
+                if (cmd.ClientId == null)
+                    cmd.ClientId = _appContext.ClientId;
+
+                var sql = @"SELECT * FROM CalcIncomeStmt({0}) ORDER BY [Row]";
+                return _db.Execute<Item>(sql, cmd);
+            }
+        }
+    };
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+IncomeStmtRpt.cs
+2
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using Common;
+using MediatR;
+
+namespace Dashboard
+{
+    public class IncomeStmtRpt : IRequest<IncomeStmtRpt.Report>
+    {
+        public int? UserId { get; set; }
+        public int? ClientId { get; set; }
+        public DateTime StartDate { get; set; }
+        public DateTime EndDate { get; set; }
+        public bool GainLoss { get; set; }
+        public int? SheetDim1 { get; set; }
+        public int? SheetDim2 { get; set; }
+        public int? SheetDim3 { get; set; }
+        public int? SheetDim4 { get; set; }
+        public int? SheetDim5 { get; set; }
+        public int? CategoryId { get; set; }
+        public int? LineDim1 { get; set; }
+        public int? LineDim2 { get; set; }
+        public int? LineDim3 { get; set; }
+        public string RowView { get; set; }
+        public string ColView { get; set; }
+        public string RowLink { get; set; }
+        public string ValueLink { get; set; }
+
+        public class Report
+        {
+            public string RowView { get; set; }
+            public string ColView { get; set; }
+            public string RowLink { get; set; }
+            public string ValueLink { get; set; }
+            public List<string> Columns { get; set; }
+            public List<Row> Incomes { get; set; }
+            public Row TotalIncome { get; set; }
+            public List<Row> Expenses { get; set; }
+            public Row TotalExpense { get; set; }
+            public Row OperatingGainLoss { get; set; }
+            public List<Row> OtherIncomes { get; set; }
+            public Row TotalOtherIncome { get; set; }
+            public List<Row> OtherExpenses { get; set; }
+            public Row TotalOtherExpense { get; set; }
+            public Row NetGainLoss { get; set; }
+            public List<Row> GainLosses { get; set; }
+
+            public bool ShowMonthlyBudget
+            {
+                get { return ColView == "Month"; }
+            }
+
+            public string Fmt(decimal? num)
+            {
+                return num == null || num == 0m ? null : num.ToString("#,##0");
+            }
+
+            public string GetValueLink(Row row, Ext.ForEachItem<decimal> value)
+            {
+                if (row == null || value.Item == 0m)
+                    return null;
+
+                if (ValueLink == null)
+                    return Fmt(value.Item);
+
+                var url = string.Format(ValueLink, row.Id, Columns[value.Index]);
+                return string.Format("<a href='{0}' target='_blank'>{1}</a>",
+                    url, Fmt(value.Item));
+            }
+        };
+
+        public class Row
+        {
+            public int Id { get; set; }
+            public string Text { get; set; }
+            public List<decimal> Values { get; set; }
+            public decimal MonthlyBudget { get; set; }
+            public decimal MonthlyVariance { get; set; }
+            public decimal TotalActual { get; set; }
+            public decimal TotalBudget { get; set; }
+            public decimal TotalVariance { get; set; }
+        };
+
+        internal class Handler : IRequestHandler<IncomeStmtRpt, Report>
+        {
+            private readonly IAppContext _appContext;
+            private readonly IMediator _mediator;
+            private List<CalcIncomeStmt.Item> _rows;
+            private List<string> _columns;
+
+            public Handler(IAppContext appContext, IMediator mediator)
+            {
+                _appContext = appContext;
+                _mediator = mediator;
+            }
+
+            public Report Handle(IncomeStmtRpt request)
+            {
+                if (request.UserId == null)
+                    request.UserId = _appContext.User.Id;
+
+                if (request.ClientId == null)
+                    request.ClientId = _appContext.ClientId;
+
+                _rows = _mediator.Send(request.MapData(new CalcIncomeStmt()));
+                _columns = _rows.Where(x => x.WorksheetType == "Columns").Select(x => x.Col).ToList();
+
+                var report = new Report
+                {
+                    RowView = request.RowView,
+                    ColView = request.ColView,
+                    RowLink = request.RowLink,
+                    ValueLink = request.ValueLink,
+                    Columns = _columns,
+                    Incomes = new List<Row>(),
+                    TotalIncome = NewRow(0, "Total Income"),
+                    Expenses = new List<Row>(),
+                    TotalExpense = NewRow(0, "Total Expense"),
+                    OperatingGainLoss = NewRow(0, "Operating Gain/Loss"),
+                    OtherIncomes = new List<Row>(),
+                    TotalOtherIncome = NewRow(0, "Total Other Income"),
+                    OtherExpenses = new List<Row>(),
+                    TotalOtherExpense = NewRow(0, "Total Other Expense"),
+                    NetGainLoss = NewRow(0, "Net Gain/Loss"),
+                    GainLosses = new List<Row>(),
+                };
+
+                if (request.GainLoss)
+                {
+                    ComputeGainLossRows(report.GainLosses, report.NetGainLoss);
+                }
+                else
+                {
+                    ComputeRows(Account.INCOME, report.Incomes, report.TotalIncome);
+                    ComputeRows(Account.EXPENSE, report.Expenses, report.TotalExpense);
+                    ComputeDifference(NewRow(0, ""), report.TotalIncome, report.TotalExpense, report.OperatingGainLoss);
+                    ComputeRows(Account.OTHER_INCOME, report.OtherIncomes, report.TotalOtherIncome);
+                    ComputeRows(Account.OTHER_EXPENSE, report.OtherExpenses, report.TotalOtherExpense);
+                    ComputeDifference(report.OperatingGainLoss, report.TotalOtherIncome, report.TotalOtherExpense, report.NetGainLoss);
+                }
+
+                return report;
+            }
+
+            private void ComputeRows(string type, List<Row> section, Row total)
+            {
+                var accounts = _rows.Where(x => x.WorksheetType == Worksheet.ACTUAL && x.AccountType == type)
+                                    .Select(x => new {x.Id, x.Row})
+                                    .Distinct();
+
+                foreach (var account in accounts)
+                {
+                    var row = NewRow(account.Id, account.Row);
+                    var budgets = _rows.Where(x => x.WorksheetType == Worksheet.BUDGET
+                                                   && x.AccountType == type && x.Id == row.Id)
+                                       .ToList();
+
+                    foreach (var col in _columns.ToFor())
+                    {
+                        var actual = _rows.Where(x => x.WorksheetType == Worksheet.ACTUAL
+                                                     && x.AccountType == type && x.Id == row.Id &&
+                                                     x.Col == col.Item)
+                                         .Select(x => (decimal?)x.Value)
+                                         .SingleOrDefault() ?? 0;
+
+                        if (col.Last)
+                        {
+                            var budget = budgets.Where(x => x.Col == col.Item)
+                                                .Select(x => (decimal?)x.Value)
+                                                .SingleOrDefault() ?? 0;
+
+                            row.MonthlyBudget = budget;
+                            row.MonthlyVariance = budget - actual;
+                        }
+
+                        row.Values[col.Index] = actual;
+                        total.Values[col.Index] += actual;
+                    }
+
+                    row.TotalActual = row.Values.Sum();
+                    row.TotalBudget = budgets.Sum(x => x.Value);
+                    row.TotalVariance = row.TotalActual - row.TotalBudget;
+
+                    total.MonthlyBudget += row.MonthlyBudget;
+                    total.MonthlyVariance += row.MonthlyVariance;
+                    total.TotalActual += row.TotalActual;
+                    total.TotalBudget += row.TotalBudget;
+                    total.TotalVariance += row.TotalVariance;
+
+                    section.Add(row);
+                }
+            }
+
+            private void ComputeDifference(Row init, Row income, Row expense, Row gainLoss)
+            {
+                foreach (var col in _columns.ToFor())
+                {
+                    gainLoss.Values[col.Index] = init.Values[col.Index] + income.Values[col.Index] - expense.Values[col.Index];
+                }
+
+                gainLoss.MonthlyBudget = init.MonthlyBudget + income.MonthlyBudget - expense.MonthlyBudget;
+                gainLoss.MonthlyVariance = init.MonthlyVariance + income.MonthlyVariance - expense.MonthlyVariance;
+                gainLoss.TotalActual = init.TotalActual + income.TotalActual - expense.TotalActual;
+                gainLoss.TotalBudget = init.TotalBudget + income.TotalBudget - expense.TotalBudget;
+                gainLoss.TotalVariance = init.TotalVariance + income.TotalVariance - expense.TotalVariance;
+            }
+
+            private void ComputeGainLossRows(List<Row> section, Row total)
+            {
+                var accounts = _rows.Where(x => x.WorksheetType == Worksheet.ACTUAL)
+                                    .Select(x => new { x.Id, x.Row })
+                                    .Distinct();
+
+                foreach (var account in accounts)
+                {
+                    var row = NewRow(account.Id, account.Row);
+                    var incomeBudgets = _rows.Where(x => x.WorksheetType == Worksheet.BUDGET && x.Id == row.Id
+                                                         && (x.AccountType == Account.INCOME || x.AccountType == Account.OTHER_INCOME))
+                                             .ToList();
+                    var expenseBudgets = _rows.Where(x => x.WorksheetType == Worksheet.BUDGET && x.Id == row.Id
+                                                          && (x.AccountType == Account.EXPENSE || x.AccountType == Account.OTHER_EXPENSE))
+                                              .ToList();
+
+                    foreach (var col in _columns.ToFor())
+                    {
+                        var incomeActual = _rows.Where(x => x.WorksheetType == Worksheet.ACTUAL && x.Id == row.Id
+                                                             && (x.AccountType == Account.INCOME || x.AccountType == Account.OTHER_INCOME)
+                                                             && x.Col == col.Item)
+                                                 .Select(x => (decimal?)x.Value)
+                                                 .SingleOrDefault() ?? 0;
+
+                        var expenseActual = _rows.Where(x => x.WorksheetType == Worksheet.ACTUAL && x.Id == row.Id
+                                                              && (x.AccountType == Account.EXPENSE || x.AccountType == Account.OTHER_EXPENSE)
+                                                              && x.Col == col.Item)
+                                                  .Select(x => (decimal?)x.Value)
+                                                  .SingleOrDefault() ?? 0;
+                        var actual = incomeActual - expenseActual;
+
+                        if (col.Last)
+                        {
+                            var incomeBudget = incomeBudgets.Where(x => x.Col == col.Item)
+                                                            .Sum(x => (decimal?)x.Value) ?? 0;
+                            var expenseBudget = expenseBudgets.Where(x => x.Col == col.Item)
+                                                              .Sum(x => (decimal?)x.Value) ?? 0;
+
+                            row.MonthlyBudget = incomeBudget - expenseBudget;
+                            row.MonthlyVariance = row.MonthlyBudget - actual;
+                        }
+
+                        row.Values[col.Index] = actual;
+                        total.Values[col.Index] += actual;
+                    }
+
+                    row.TotalActual = row.Values.Sum();
+                    row.TotalBudget = incomeBudgets.Sum(x => x.Value) - expenseBudgets.Sum(x => x.Value);
+                    row.TotalVariance = row.TotalActual - row.TotalBudget;
+
+                    total.MonthlyBudget += row.MonthlyBudget;
+                    total.MonthlyVariance += row.MonthlyVariance;
+                    total.TotalActual += row.TotalActual;
+                    total.TotalBudget += row.TotalBudget;
+                    total.TotalVariance += row.TotalVariance;
+
+                    section.Add(row);
+                }
+            }
+
+            private Row NewRow(int id, string text)
+            {
+                return new Row
+                {
+                    Id = id,
+                    Text = text,
+                    Values = new List<decimal>(new decimal[_columns.Count]),
+                };
+            }
+        };
+    };
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+TransactionHandler.cs
+2
+using System;
+using System.Data.Entity;
+using System.Data.Entity.Validation;
+using System.Linq;
+using MediatR;
+
+//_container.RegisterDecorator(typeof(IRequestHandler<,>), typeof(TransactionHandler<,>));
+namespace CommanderDemo.Web
+{
+    /// <summary>
+    /// Wraps inner handlers in a TransactionScope
+    /// </summary>
+    internal class TransactionHandler<TRequest, TResponse> : IRequestHandler<TRequest, TResponse>
+        where TRequest : IRequest<TResponse>
+    {
+        private readonly IRequestHandler<TRequest, TResponse> _inner;
+        private readonly DbContext _db;
+
+        public TransactionHandler(IRequestHandler<TRequest, TResponse> inner, DbContext db)
+        {
+            _inner = inner;
+            _db = db;
+        }
+
+        public TResponse Handle(TRequest request)
+        {
+            if (_db.Database.CurrentTransaction != null)
+                return _inner.Handle(request);
+
+            using (var scope = _db.Database.BeginTransaction())
+            {
+                try
+                {
+                    var response = _inner.Handle(request);
+                    _db.SaveChanges();
+                    scope.Commit();
+                    return response;
+                }
+                catch (DbEntityValidationException ex)
+                {
+                    scope.Rollback();
+                    var errors = ex.EntityValidationErrors
+                                   .SelectMany(x => x.ValidationErrors.Select(y => x.Entry.Entity.GetType().Name + ": " + y.ErrorMessage));
+                    throw new ApplicationException(string.Join(Environment.NewLine, errors));
+                }
+            }
+        }
+    };
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Swagger.io
+2
+
+Swagger.io
+http://swagger.io/
+
+Swagger is a simple yet powerful representation of your RESTful API. With the largest ecosystem of API tooling on the planet, thousands of developers are supporting Swagger in almost every modern programming language and deployment environment. With a Swagger-enabled API, you get interactive documentation, client SDK generation and discoverability.
+
+Demo:
+http://petstore.swagger.io/
+
+Data:
+http://petstore.swagger.io/v2/swagger.json
+
+{
+  "swagger": "2.0",
+  "info": {
+    "description": "This is a sample server Petstore server.  You can find out more about Swagger at [http:\/\/swagger.io](http:\/\/swagger.io) or on [irc.freenode.net, #swagger](http:\/\/swagger.io\/irc\/).  For this sample, you can use the api key `special-key` to test the authorization filters.",
+    "version": "1.0.0",
+    "title": "Swagger Petstore",
+    "termsOfService": "http:\/\/swagger.io\/terms\/",
+    "contact": {
+      "email": "apiteam@swagger.io"
+    },
+    "license": {
+      "name": "Apache 2.0",
+      "url": "http:\/\/www.apache.org\/licenses\/LICENSE-2.0.html"
+    }
+  },
+  "host": "petstore.swagger.io",
+  "basePath": "\/v2",
+  "tags": [
+    {
+      "name": "pet",
+      "description": "Everything about your Pets",
+      "externalDocs": {
+        "description": "Find out more",
+        "url": "http:\/\/swagger.io"
+      }
+    },
+    {
+      "name": "store",
+      "description": "Access to Petstore orders"
+    },
+    {
+      "name": "user",
+      "description": "Operations about user",
+      "externalDocs": {
+        "description": "Find out more about our store",
+        "url": "http:\/\/swagger.io"
+      }
+    }
+  ],
+  "schemes": [
+    "http"
+  ],
+  "paths": {
+    "\/pet": {
+      "post": {
+        "tags": [
+          "pet"
+        ],
+        "summary": "Add a new pet to the store",
+        "description": "",
+        "operationId": "addPet",
+        "consumes": [
+          "application\/json",
+          "application\/xml"
+        ],
+        "produces": [
+          "application\/xml",
+          "application\/json"
+        ],
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "description": "Pet object that needs to be added to the store",
+            "required": true,
+            "schema": {
+              "$ref": "#\/definitions\/Pet"
+            }
+          }
+        ],
+        "responses": {
+          "405": {
+            "description": "Invalid input"
+          }
+        },
+        "security": [
+          {
+            "petstore_auth": [
+              "write:pets",
+              "read:pets"
+            ]
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "pet"
+        ],
+        "summary": "Update an existing pet",
+        "description": "",
+        "operationId": "updatePet",
+        "consumes": [
+          "application\/json",
+          "application\/xml"
+        ],
+        "produces": [
+          "application\/xml",
+          "application\/json"
+        ],
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "description": "Pet object that needs to be added to the store",
+            "required": true,
+            "schema": {
+              "$ref": "#\/definitions\/Pet"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Invalid ID supplied"
+          },
+          "404": {
+            "description": "Pet not found"
+          },
+          "405": {
+            "description": "Validation exception"
+          }
+        },
+        "security": [
+          {
+            "petstore_auth": [
+              "write:pets",
+              "read:pets"
+            ]
+          }
+        ]
+      }
+    },
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+AuditService.cs
+2
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Net;
+using System.Reflection;
+using CfgDotNet;
+using CommandR.Authentication;
+using MongoDB.Driver;
+
+//_container.Register<AuditService>(lifestyle);
+namespace CommanderDemo.Web
+{
+    public class AuditService : IDisposable
+    {
+        private readonly Settings _settings;
+        private readonly MongoCollection<AuditDocument> _collection;
+        private readonly string _process;
+        private AuditDocument _auditDocument;
+        private bool _disposed; // false
+
+        public AuditService(Settings settings)
+        {
+            _settings = settings;
+            if (_settings.IsDisabled)
+                return;
+
+            var assembly = Assembly.GetEntryAssembly() ?? Assembly.GetExecutingAssembly();
+            _process = assembly.GetName().Name;
+
+            var mongoUrl = MongoUrl.Create(settings.ConnectionString);
+            var client = new MongoClient(settings.ConnectionString);
+            var server = client.GetServer();
+            var database = server.GetDatabase(mongoUrl.DatabaseName);
+
+            _collection = database.GetCollection<AuditDocument>(settings.CollectionName);
+        }
+
+        public void AddChild(AuditDocument auditDocument, AppContext context)
+        {
+            if (_settings.IsDisabled)
+                return;
+
+            if (_auditDocument == null)
+                _auditDocument = new AuditDocument("Parent");
+
+            if (_auditDocument.Body == null)
+                _auditDocument.Body = new List<AuditDocument>();
+
+            var children = (List<AuditDocument>)_auditDocument.Body;
+            auditDocument.Context = context;
+            auditDocument.Process = _process;
+
+            if (auditDocument.DocumentType != "SQL")
+            {
+                children.Add(auditDocument);
+            }
+            else
+            {
+                var firstSqlAuditDocument = children.FirstOrDefault(x => x.DocumentType == "SQL");
+                if (firstSqlAuditDocument != null)
+                {
+                    firstSqlAuditDocument.Body = (firstSqlAuditDocument.Body ?? string.Empty) + auditDocument.Body.ToString();
+                }
+                else
+                {
+                    children.Add(auditDocument);
+                }
+            }
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (_disposed)
+                return;
+
+            if (disposing && _auditDocument != null && _collection != null)
+            {
+                _collection.Insert(_auditDocument);
+            }
+
+            _disposed = true;
+        }
+
+        public class Settings : BaseSettings
+        {
+            // ex. mongodb://[Username:password@]host[:port]/[database][?options]
+            public string ConnectionString { get; set; }
+            public string CollectionName { get; set; }
+            public string IncludeCommands { get; set; }
+            public string ExcludeCommands { get; set; }
+
+            public override void Validate()
+            {
+                if (IsDisabled)
+                    return;
+
+                if (string.IsNullOrWhiteSpace(CollectionName))
+                    CollectionName = "Audit";
+
+                if (string.IsNullOrWhiteSpace(ConnectionString))
+                    ConnectionString = "mongodb://127.0.0.1/test";
+
+                CollectionName = CollectionName.Replace("_MACHINE", "_" + Environment.MachineName);
+
+                TestMongoConnection(ConnectionString);
+            }
+
+            private static void TestMongoConnection(string connectionString)
+            {
+                var settings = MongoClientSettings.FromUrl(new MongoUrl(connectionString));
+                settings.ConnectTimeout = TimeSpan.FromSeconds(5);
+                var client = new MongoClient(settings);
+                var server = client.GetServer();
+                server.Ping();
+            }
+        };
+    };
+
+    public class AuditDocument
+    {
+        private object _body;
+
+        public AuditDocument(string documentType, string name = "", object body = null)
+        {
+            DocumentType = documentType;
+            Name = name;
+            Body = body;
+            Created = DateTime.UtcNow;
+            HostName = Dns.GetHostEntry(string.Empty).HostName;
+        }
+
+        public DateTime Created { get; set; }
+        public Dictionary<string, object> Context { get; set; }
+        public string HostName { get; set; }
+        public string Process { get; set; }
+        public string DocumentType { get; set; }
+        public string Name { get; set; }
+        public string BodyType { get; set; }
+
+        public object Body
+        {
+            get { return _body; }
+            set
+            {
+                // mongodb apache code
+                // if we want shorter full names - TBD
+                // TypeNameDiscriminator.GetDiscriminator(value.GetType());
+                BodyType = value == null ? "null" : value.GetType().FullName;
+                _body = value;
+            }
+        }
+    };
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+AuditHandler.cs
+2
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using CommandR.Authentication;
+using MediatR;
+
+//_container.RegisterDecorator(typeof(IRequestHandler<,>), typeof(AuditHandler<,>));
+namespace CommanderDemo.Web
+{
+    internal class AuditHandler<TRequest, TResponse> : IRequestHandler<TRequest, TResponse>
+        where TRequest : IRequest<TResponse>
+    {
+        private readonly IRequestHandler<TRequest, TResponse> _inner;
+        private readonly AuditService _auditService;
+        private readonly ExecutionEnvironment _executionEnvironment;
+        private readonly AuditService.Settings _settings;
+        private readonly List<string> _inclusionList;
+        private readonly List<string> _exclusionList;
+
+        public AuditHandler(IRequestHandler<TRequest, TResponse> inner, AuditService auditService, ExecutionEnvironment executionEnvironment, AuditService.Settings settings)
+        {
+            _inner = inner;
+            _auditService = auditService;
+            _executionEnvironment = executionEnvironment;
+            _settings = settings;
+
+            _inclusionList = (settings.IncludeCommands ?? string.Empty).Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).ToList();
+            _exclusionList = (settings.ExcludeCommands ?? string.Empty).Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).ToList();
+        }
+
+        public TResponse Handle(TRequest request)
+        {
+            if (_settings.IsDisabled)
+                return _inner.Handle(request);
+
+            var requestName = request.GetType().Name;
+            var context = _executionEnvironment.AppContext;
+
+            if ((_inclusionList.Count > 0 && !_inclusionList.Contains(requestName)) || _exclusionList.Contains(requestName))
+                return _inner.Handle(request);
+
+            try
+            {
+                _auditService.AddChild(new AuditDocument("Request", requestName, request), context);
+                var response = _inner.Handle(request);
+                _auditService.AddChild(new AuditDocument("Response", response.GetType().FullName, response), context);
+                return response;
+            }
+            catch (Exception ex)
+            {
+                var exceptionInfo = new ExceptionInfo(ex);
+                _auditService.AddChild(new AuditDocument("ExceptionInfo", exceptionInfo.GetType().FullName, exceptionInfo), context);
+                throw;
+            }
+        }
+    };
+
+    [Serializable]
+    public class ExceptionInfo
+    {
+        public ExceptionInfo(Exception exception)
+        {
+            Source = exception.Source;
+            Message = exception.Message;
+            StackTrace = exception.StackTrace;
+        }
+
+        public string Source { get; set; }
+        public string Message { get; set; }
+        public string StackTrace { get; set; }
+    };
+}
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Nancy Akka Mediator
+2
+
+C:\Users\paul.wheeler\Dropbox\Code\Talks\Nancy_Akka_Mediator.linq
+
+<end node> 5P9i0s8y19Z

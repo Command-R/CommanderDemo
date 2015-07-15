@@ -1,0 +1,9 @@
+﻿@model dynamic
+@{
+    var error = (string)ViewBag._Error;
+}
+
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">@error</div>
+}

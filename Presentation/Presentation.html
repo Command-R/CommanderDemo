@@ -1,0 +1,50 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Command and Conquer</title>
+    <meta name="description" content="Take command of your applications">
+    <meta name="author" content="Paul Wheeler">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, minimal-ui">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/reveal.js/3.0.0/css/reveal.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/reveal.js/3.0.0/css/theme/black.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/reveal.js/3.0.0/lib/css/zenburn.css" />
+    <script src="https://cdn.jsdelivr.net/reveal.js/3.0.0/lib/js/head.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/reveal.js/3.0.0/js/reveal.min.js"></script>
+</head>
+<body class="reveal">
+    <article class="slides">
+        <section>
+            <h1>Command and Conquer</h1>
+            <div class="larger blue">
+                Paul Wheeler<br />
+                Solutions Architect @ Martus Solutions
+            </div>
+            <div class="smaller">
+                Paul@PaulWheeler.com<br/>
+                @PaulWheeler
+            </div>
+        </section>
+    </article>
+    <style type="text/css">
+        .blue { color:#42affa; }
+        b { color:#FAE842; }
+        .larger { font-size:larger !important; }
+        .smaller { font-size:smaller !important; }
+    </style>
+    <script>
+        Reveal.initialize({
+            controls: true,
+            progress: true,
+            history: true,
+            center: true,
+            transition: 'slide',
+            dependencies: [
+                { src: 'https://cdn.jsdelivr.net/reveal.js/3.0.0/plugin/highlight/highlight.js', async: true, condition: function() { return !!document.querySelector('pre code'); }, callback: function() { hljs.initHighlightingOnLoad(); } },
+                { src: 'https://cdn.jsdelivr.net/reveal.js/3.0.0/plugin/zoom-js/zoom.js', async: true },
+                { src: 'https://cdn.jsdelivr.net/reveal.js/3.0.0/plugin/notes/notes.js', async: true }
+            ]
+        });
+    </script>
+</body>
+</html>

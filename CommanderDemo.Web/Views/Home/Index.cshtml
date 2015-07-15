@@ -1,0 +1,34 @@
+﻿<!doctype html>
+<html>
+<head>
+    <link rel="stylesheet" type="text/css" href="/jspm_packages/github/twbs/bootstrap@3.3.4/css/bootstrap.min.css">
+    <link rel="stylesheet" type="text/css" href="/styles/styles.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="~/Scripts/jquery-1.6.4.js"></script>
+    <script src="~/Scripts/jquery.signalR-2.2.0.js"></script>
+    <script src="~/signalr/hubs"></script>
+</head>
+<body aurelia-app>
+    <div class="splash">
+        <div class="message">Aurelia Contacts</div>
+        <i class="fa fa-spinner fa-spin"></i>
+    </div>
+    <script src="jspm_packages/system.js"></script>
+    <script src="config.js"></script>
+    <script>
+        System.config({
+            "paths": {
+                "*": "dist/*.js"
+            }
+        });
+    </script>
+    <script>
+        System.import('aurelia-bootstrapper');
+    </script>
+    <script>
+        //HACK: In a real SPA we would login from javascript and just store the token.
+        // Since this is a hybrid MVC app, we will pass the token from the Session.
+        window.JsonRpcToken = "@Session["TokenId"]";
+    </script>
+</body>
+</html>
